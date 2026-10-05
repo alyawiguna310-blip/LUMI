@@ -1,0 +1,18 @@
+PyQt6>=6.5.0
+pystray>=0.19.5
+Pillow>=10.0.0
+python-dotenv>=1.0.0
+huggingface_hub>=0.23.0
+google-genai>=1.0.0
+groq>=0.11.0
+openai>=1.50.0
+anthropic>=0.40.0
+
+# Phase 3 — TTS
+kokoro-onnx>=0.4.0
+sounddevice>=0.4.6
+numpy>=1.24.0
+
+# Phase 3 Part 2 — STT
+faster-whisper>=1.0.0
+pynput>=1.7.6

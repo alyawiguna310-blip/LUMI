@@ -1,0 +1,1 @@
+"""Provider package — one adapter per LLM backend."""
