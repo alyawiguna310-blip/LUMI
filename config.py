@@ -48,7 +48,7 @@ class Config:
     CONFIRMATION_TIMEOUT: int = int(
         os.getenv("LUMI_CONFIRMATION_TIMEOUT", "60"))
     SANDBOX_ENABLED: bool = (
-        os.getenv("LUMI_SANDBOX_ENABLED", "true").lower() == "true")
+        os.getenv("LUMI_SANDBOX_ENABLED", "false").lower() == "true")
     SANDBOX_ROOT: str = os.getenv("LUMI_SANDBOX_ROOT", "F:\\")
 
     # --- Admin terminal (Phase 3 privileged helper) ---
