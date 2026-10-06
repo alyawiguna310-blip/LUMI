@@ -9,7 +9,7 @@ import json
 import os
 import sys
 
-import launch_lumi_as_runtime
+import launch_lumi_as_runtime as launcher
 
 OUTPUT_PATH = r"D:\Lumi\workspace\phase5fc_identity.json"
 MINIMAL_OUTPUT_PATH = r"D:\Lumi\workspace\phase5fc_minimal.txt"
@@ -39,7 +39,10 @@ def _report_result(label, result):
     elif result.timed_out:
         print("  Child timed out after", result.wait_seconds, "seconds")
     else:
-        print("  Child exit code:", result.exit_code)
+        if label == "Probe":
+            print("  Probe exit code:", result.exit_code)
+        else:
+            print("  " + label + " exit code:", result.exit_code)
 
 
 def main():
@@ -52,7 +55,7 @@ def main():
 
     _remove_previous()
 
-    probe = launch_lumi_as_runtime.launch_probe()
+    probe = launcher.launch_probe()
     _report_result("Probe", probe)
     if probe.timed_out:
         print("Probe timed out; validation cannot continue.")
@@ -74,7 +77,7 @@ def main():
         return 1
 
     print("Identity:", json.dumps(info, sort_keys=True))
-    if info.get("username") != launch_lumi_as_runtime.RUNTIME_USERNAME:
+    if info.get("username") != launcher.RUNTIME_USERNAME:
         print("FAIL: unexpected runtime username")
         return 1
     if info.get("is_elevated"):
@@ -84,7 +87,7 @@ def main():
         print("FAIL: LumiRuntime is an Administrators member")
         return 1
 
-    minimal = launch_lumi_as_runtime.launch_minimal_diagnostic()
+    minimal = launcher.launch_minimal_diagnostic()
     _report_result("Minimal diagnostic", minimal)
     if minimal.timed_out or not minimal.create_ok or minimal.exit_code != 0:
         return 1
@@ -93,7 +96,7 @@ def main():
               "exit code:", minimal.exit_code)
         return 1
 
-    system_minimal = launch_lumi_as_runtime.launch_system_minimal_diagnostic()
+    system_minimal = launcher.launch_system_minimal_diagnostic()
     _report_result("System-Python diagnostic", system_minimal)
     if (system_minimal.timed_out or not system_minimal.create_ok
             or system_minimal.exit_code != 0):

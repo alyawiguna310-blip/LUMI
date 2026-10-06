@@ -8,6 +8,7 @@ from __future__ import annotations
 import ctypes
 import json
 import os
+import sys
 import time
 
 OUTPUT_DIR = r"D:\Lumi\workspace"
@@ -78,7 +79,8 @@ def _write_identity(info):
 def main():
     info = collect()
     _write_identity(info)
-    print(json.dumps(info, sort_keys=True), flush=True)
+    print(json.dumps(info, sort_keys=True))
+    sys.stdout.flush()
     time.sleep(PROBE_HOLD_SECONDS)
 
 
