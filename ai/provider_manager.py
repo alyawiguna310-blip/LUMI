@@ -133,6 +133,13 @@ class ProviderManager(LLMProvider):
             try:
                 logger.debug("Trying provider %s", entry.name)
                 result = entry.provider.chat(messages, max_tokens=max_tokens)
+
+                # An empty response with no tool call is not a successful
+                # answer. Treat it as a transient provider failure so the
+                # next healthy provider gets a chance to respond.
+                if not result.text.strip() and not result.tool_calls:
+                    raise RuntimeError("provider returned an empty response")
+
                 result.source_provider = entry.name
                 entry.mark_success()
                 logger.info("Provider %s succeeded", entry.name)
