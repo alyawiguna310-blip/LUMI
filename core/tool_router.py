@@ -43,7 +43,7 @@ class ToolRouter:
             "terminal.run_admin": terminal._do_run_admin_elevated,
         }
 
-    def route(self, name: str, args: dict) -> dict:
+    def route(self, name: str, args: dict) -> dict:\n        # Diagnostics are registered with the same gate before routing.\n        # They remain read-only and cannot bypass control-plane protections.\n        if "diagnostics.read_log" not in self.gate._tools:\n            diagnostics.register(self.gate)\n
         ok, err, cleaned = parse_tool_call(name, args)
         if not ok:
             logger.warning("Tool call rejected: %s — %s", name, err)
