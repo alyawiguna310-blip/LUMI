@@ -351,7 +351,11 @@ def extract_tool_calls(gemini_response) -> list[ToolCall]:
                     args = dict(raw_args)
                 except Exception:
                     args = {}
-                calls.append(ToolCall(name=name, arguments=args, id=""))
+                calls.append(ToolCall(
+                    name=name,
+                    arguments=args,
+                    id=getattr(fc, "id", None) or "",
+                ))
     except Exception:
         logger.exception("Failed to extract tool calls from Gemini response")
     return calls
