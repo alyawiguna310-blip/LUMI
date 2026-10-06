@@ -44,6 +44,7 @@ class ChatResponse:
     tool_calls: list[ToolCall] = field(default_factory=list)
     raw_parts: list = field(default_factory=list)
     raw: Any | None = None
+    source_provider: str = ""
 
 
 # ---------------------------------------------------------------- base class
