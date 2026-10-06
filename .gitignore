@@ -8,7 +8,3 @@ phase3_inspection.txt
 phase3_uac_test.py
 models/
 workspace/phase5fc_runtime_output.txt
-scripts/_phase5fc_probe.py
-scripts/_phase5fc_minimal.py
-scripts/_phase5fc_system_minimal.py
-scripts/phase5fc_validate.py
