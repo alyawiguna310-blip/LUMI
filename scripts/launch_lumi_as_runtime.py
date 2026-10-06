@@ -82,20 +82,31 @@ TEST2_DIAG_PATH = os.path.join(PROJECT_ROOT, "diag.txt")
 # ------------------------------------------------------------------ Win32
 
 
-# Win32 bindings are initialized lazily so the module can be imported
-# and statically tested on Linux. Windows execution still fails closed if
-# the required APIs cannot be loaded.
-_adv32 = None
-_k32 = None
+# Win32 bindings are lazy so importing this module remains safe on Linux.
+# The first actual API access still requires Windows.
+class _LazyWinDLL:
+    def __init__(self, name: str):
+        self._name = name
+        self._dll = None
+
+    def _load(self):
+        if sys.platform != "win32":
+            raise RuntimeError("LumiRuntime launcher is Windows-only")
+        if self._dll is None:
+            self._dll = ctypes.WinDLL(self._name, use_last_error=True)
+        return self._dll
+
+    def __getattr__(self, name):
+        return getattr(self._load(), name)
+
+_adv32 = _LazyWinDLL("advapi32")
+_k32 = _LazyWinDLL("kernel32")
 
 def _require_windows_api():
-    global _adv32, _k32
     if sys.platform != "win32":
         raise RuntimeError("LumiRuntime launcher is Windows-only")
-    if _adv32 is None:
-        _adv32 = ctypes.WinDLL("advapi32", use_last_error=True)
-    if _k32 is None:
-        _k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _adv32._load()
+    _k32._load()
     return _adv32, _k32
 
 CRED_TYPE_GENERIC = 1
