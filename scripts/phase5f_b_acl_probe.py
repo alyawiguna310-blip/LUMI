@@ -7,8 +7,10 @@ This probe takes no arguments and uses only fixed paths.
 """
 from __future__ import annotations
 
+import ctypes
 import json
 import os
+import subprocess
 
 PROJECT_ROOT = r"D:\Lumi"
 SECURITY_DIR = os.path.join(PROJECT_ROOT, "security")
@@ -46,14 +48,43 @@ def _test_directory_create():
         return False, "directory create was allowed"
 
 
+def _current_identity():
+    try:
+        proc = subprocess.run(
+            ["whoami", "/user", "/groups"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        return {
+            "returncode": proc.returncode,
+            "stdout": proc.stdout,
+            "stderr": proc.stderr,
+        }
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
 def _test_file_read(path):
     try:
+        readable = os.access(path, os.R_OK)
         if os.path.isdir(path):
             os.listdir(path)
         else:
             with open(path, "rb") as f:
                 f.read(1)
-        return True, "read permitted"
+        return True, f"read permitted; os.access(R_OK)={readable}"
+    except OSError as exc:
+        detail = {
+            "type": type(exc).__name__,
+            "errno": exc.errno,
+            "winerror": getattr(exc, "winerror", None),
+            "strerror": exc.strerror,
+            "filename": exc.filename,
+            "access_r": os.access(path, os.R_OK),
+        }
+        return False, f"read failed: {json.dumps(detail, sort_keys=True)}"
     except Exception as exc:
         return False, f"read failed: {type(exc).__name__}: {exc}"
 
@@ -117,6 +148,7 @@ def main():
 
     result = {
         "username": os.environ.get("USERNAME", ""),
+        "identity": _current_identity(),
         "checks": {k: {"passed": v[0], "detail": v[1]} for k, v in checks.items()},
         "passed": all(v[0] for v in checks.values()),
     }
