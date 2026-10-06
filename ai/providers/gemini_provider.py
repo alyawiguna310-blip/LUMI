@@ -89,16 +89,35 @@ class GeminiProvider(LLMProvider):
             else:
                 logger.warning("Unknown role %r; skipping.", m.role)
 
+        # Gemini 3.x uses thinking_level, not the legacy thinking_budget.
+        # Gemini 3.x also recommends leaving temperature/top_p at their defaults.
+        # Gemini 2.5 still uses thinking_budget, so keep compatibility for it.
         kwargs = dict(
             max_output_tokens=max_tokens,
-            temperature=0.85,
-            top_p=0.95,
             system_instruction=system_instruction,
         )
+
+        model_lower = self.model.lower()
         try:
-            kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+            if model_lower.startswith("gemini-3"):
+                kwargs["thinking_config"] = types.ThinkingConfig(
+                    thinking_level="minimal"
+                )
+            elif model_lower.startswith("gemini-2.5"):
+                kwargs["thinking_config"] = types.ThinkingConfig(
+                    thinking_budget=0
+                )
+            else:
+                # Older/other Gemini models may still accept the classic
+                # sampling controls.
+                kwargs["temperature"] = 0.85
+                kwargs["top_p"] = 0.95
         except Exception:
-            pass
+            logger.warning(
+                "Could not configure Gemini thinking for model %s; "
+                "using model defaults.",
+                self.model,
+            )
         if self._tools is not None:
             kwargs["tools"] = [self._tools]
 
