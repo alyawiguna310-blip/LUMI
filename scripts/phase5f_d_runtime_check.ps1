@@ -5,7 +5,7 @@ Read-only preflight for the dedicated LumiRuntime Python runtime.
 Does not modify accounts, ACLs, the existing .venv, or project files.
 
 Required production runtime:
-  C:\Program Files\LumiRuntime\Python312\python.exe
+  C:\Program Files\Python312\python.exe
 
 The runtime must live outside D:\Lumi so LumiRuntime cannot modify the
 interpreter through the project's inherited write permissions.
@@ -42,7 +42,7 @@ if (-not (Test-Path -LiteralPath $RuntimePython -PathType Leaf)) {
     Write-Output "FAIL: dedicated Python runtime is missing:"
     Write-Output "  $RuntimePython"
     Write-Output ""
-    Write-Output "Install Python 3.12 machine-wide at this exact path before continuing."
+    Write-Output "Use the existing machine-wide Python 3.12 installation at this exact path before continuing."
     exit 1
 }
 Write-Output "PASS: dedicated Python runtime exists."
