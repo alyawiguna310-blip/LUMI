@@ -6,9 +6,6 @@ Explicit Windows-side enforcement for the LumiRuntime control-plane ACL.
 Requires -Confirm. Requires an existing non-administrator LumiRuntime account.
 Changes only the discovered control-plane paths. The deny ACE blocks
 write/delete/ACL-owner changes while preserving read access.
-
-Rollback removes only the explicit deny ACE for the LumiRuntime SID; it does
-not reset or replace unrelated ACL entries.
 #>
 
 [CmdletBinding()]
@@ -63,10 +60,8 @@ $protectedFiles = @(
     (Join-Path $ProjectRoot 'storage/audit.py')
 )
 
-# Do not use the generic "W" right here. FILE_GENERIC_WRITE contains
-# READ_CONTROL and SYNCHRONIZE, which would unintentionally prevent the
-# runtime from opening protected files for read access. Deny only the
-# mutation rights required by the control-plane policy.
+# icacls symbolic rights such as "W" are generic rights and can include
+# READ_CONTROL/SYNCHRONIZE. Use explicit standard/object rights instead.
 $denyFileRights = 'WD,AD,WEA,WA,D,WDAC,WO'
 $denyDirectoryRights = 'WD,AD,WEA,WA,DC,DD,D,WDAC,WO'
 
@@ -85,15 +80,20 @@ function Verify-Path {
     }
 }
 
+function Remove-LumiRuntimeDeny {
+    param([string]$Path)
+    Invoke-Icacls -Arguments @($Path, '/remove:d', ("*" + $sid))
+}
+
 try {
     foreach ($p in $protectedDirs + $protectedFiles) {
         Verify-Path $p
     }
 
     if ($Rollback) {
-        Write-Output "Removing only the LumiRuntime deny ACEs..."
+        Write-Output "Removing LumiRuntime deny ACEs..."
         foreach ($p in $protectedDirs + $protectedFiles) {
-            Invoke-Icacls -Arguments @($p, '/remove:d', ("*" + $sid))
+            Remove-LumiRuntimeDeny $p
         }
         Write-Output "Rollback complete."
         exit 0
@@ -123,19 +123,15 @@ try {
     }
 
     foreach ($p in $protectedFiles) {
-        if (Test-Path -LiteralPath $p) {
-            Invoke-Icacls -Arguments @(
-                $p, '/deny', ("*" + $sid + ":(" + $denyFileRights + ")")
-            )
-        }
+        Invoke-Icacls -Arguments @(
+            $p, '/deny', ("*" + $sid + ":(" + $denyFileRights + ")")
+        )
     }
 
     Write-Output ""
     Write-Output "ACL enforcement commands completed."
     Write-Output "Run the read-only verifier next:"
     Write-Output "  ./phase5f_b_verify.ps1"
-    Write-Output "Rollback command (explicit):"
-    Write-Output "  ./phase5f_b_acl_apply.ps1 -Confirm -Rollback"
     exit 0
 }
 catch {
@@ -144,7 +140,7 @@ catch {
     foreach ($p in $protectedDirs + $protectedFiles) {
         try {
             if (Test-Path -LiteralPath $p) {
-                Invoke-Icacls -Arguments @($p, '/remove:d', ("*" + $sid)) | Out-Null
+                Remove-LumiRuntimeDeny $p | Out-Null
             }
         } catch {
             Write-Output "ROLLBACK WARNING: could not clean deny ACE from $p"
