@@ -93,6 +93,7 @@ class Assistant:
                     role="assistant",
                     content=response.text or "",
                     tool_calls=response.tool_calls,
+                    source_provider=self.provider.name,
                     raw_parts=response.raw_parts,
                 ))
 
