@@ -470,6 +470,13 @@ class SecurityGate:
                 )
 
         required_perm = descriptor.required_permission
+        # HIGH_RISK is always a fresh, per-operation user decision.
+        # A persistent/session grant must never silently authorize it, and
+        # even a per-operation grant is not a substitute for the explicit
+        # confirmation required by the security model.
+        if effective_risk == Risk.HIGH_RISK:
+            return "confirm", "HIGH_RISK always requires fresh confirmation"
+
         covering = self.grants.find_covering(
             descriptor.domain,
             required_perm,
@@ -478,9 +485,6 @@ class SecurityGate:
         )
         if covering is not None:
             return "allow", f"grant {covering.grant_id} covers"
-
-        if effective_risk == Risk.HIGH_RISK:
-            return "confirm", "no per-operation grant for HIGH_RISK"
 
         return "allow", "no phase2 rule"
 
