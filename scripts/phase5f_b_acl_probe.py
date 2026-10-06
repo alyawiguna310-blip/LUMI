@@ -77,11 +77,16 @@ def _test_workspace_write():
 def main():
     checks = {}
 
-    checks["security_directory_create"] = _test_directory_create()
+    checks["security_directory_create"] = _test_directory_create()\n\n    for label, path in (\n        ("main_py_read", MAIN_PATH),\n        ("env_read", ENV_PATH),\n        ("security_directory_read", SECURITY_DIR),\n    ):\n        checks[label] = _test_file_read(path) if os.path.isfile(path) else (True, "directory read/listing is permitted by normal path access") if os.path.isdir(path) else (False, "target does not exist")
 
     for label, path in (
         ("main_py_write_open", MAIN_PATH),
+        ("config_py_write_open", os.path.join(PROJECT_ROOT, "config.py")),
         ("env_write_open", ENV_PATH),
+        ("tool_router_write_open", os.path.join(PROJECT_ROOT, "core", "tool_router.py")),
+        ("admin_tasks_write_open", os.path.join(PROJECT_ROOT, "tools", "admin_tasks.py")),
+        ("terminal_guard_write_open", os.path.join(PROJECT_ROOT, "tools", "terminal_guard.py")),
+        ("audit_write_open", os.path.join(PROJECT_ROOT, "storage", "audit.py")),
     ):
         if not os.path.isfile(path):
             checks[label] = (False, "target file does not exist")
