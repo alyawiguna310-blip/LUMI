@@ -36,6 +36,7 @@ class ToolRouter:
             "terminal.run_admin":    terminal._do_run_admin_elevated,
             "applications.search":         applications._do_search,
             "applications.list_installed": applications._do_list_installed,
+            "applications.launch":          applications._do_launch,
             "applications.install":        applications._do_install,
         }
         self._elevated_executors: dict[str, Callable] = {
