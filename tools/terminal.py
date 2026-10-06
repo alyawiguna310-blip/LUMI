@@ -61,7 +61,7 @@ ADMIN_TERMINAL_SPEC = ToolSpec(
 _READONLY_TOOLS = {
     "dir", "type", "echo", "cd", "where", "ver", "whoami", "hostname",
     "date", "time", "tree", "more", "findstr", "sort",
-    "tasklist", "systeminfo",
+    "tasklist", "systeminfo", "ipconfig",
     "ls", "cat", "pwd", "grep", "head", "tail", "wc", "find", "which",
     "printf", "env", "uname",
 }
