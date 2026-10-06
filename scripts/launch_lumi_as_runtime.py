@@ -61,6 +61,12 @@ from typing import Optional
 RUNTIME_USERNAME = "LumiRuntime"
 CRED_TARGET = "LumiRuntime"
 PROJECT_ROOT = r"D:\Lumi"
+# Production runtime: machine-wide and outside the mutable project tree.
+# LumiRuntime must have read/execute access only; it must not be able to
+# modify the interpreter or its libraries.
+RUNTIME_ROOT = r"C:\Program Files\LumiRuntime"
+RUNTIME_PYTHON = os.path.join(RUNTIME_ROOT, "Python312", "python.exe")
+# Temporary: the project venv is retained only for human-side diagnostics.
 VENV_PYTHON = os.path.join(PROJECT_ROOT, ".venv", "Scripts", "python.exe")
 ENTRY = os.path.join(PROJECT_ROOT, "main.py")
 PROBE_ENTRY = os.path.join(PROJECT_ROOT, "scripts", "_phase5fc_probe.py")
@@ -296,10 +302,15 @@ def read_credential_password(target: str) -> str:
 
 
 def _check_prereqs(entry_path: str,
-                   python_executable: str = VENV_PYTHON) -> None:
+                   python_executable: str = RUNTIME_PYTHON) -> None:
     if sys.platform != "win32":
         raise SystemExit("launcher is Windows-only")
     if not os.path.isfile(python_executable):
+        if python_executable == RUNTIME_PYTHON:
+            raise SystemExit(
+                f"dedicated runtime Python missing: {RUNTIME_PYTHON}  "
+                f"(install the machine-wide LumiRuntime Python runtime first)"
+            )
         if python_executable == VENV_PYTHON:
             raise SystemExit(
                 f"venv python missing: {VENV_PYTHON}  "
@@ -354,7 +365,7 @@ def _resolve_system_python() -> Optional[str]:
 
 def _launch_with_entry(entry_path: str, *, label: str,
                        wait_seconds: int = 0) -> LaunchResult:
-    """Internal: launch exactly one fixed (VENV_PYTHON, entry_path) pair
+    """Internal: launch exactly one fixed (RUNTIME_PYTHON, entry_path) pair
     under RUNTIME_USERNAME via CreateProcessWithLogonW.
 
     No child handle redirection is configured.
@@ -370,7 +381,7 @@ def _launch_with_entry(entry_path: str, *, label: str,
     user = RUNTIME_USERNAME
     password = read_credential_password(CRED_TARGET)
 
-    command_line = f'"{VENV_PYTHON}" "{entry_path}"'
+    command_line = f'"{RUNTIME_PYTHON}" "{entry_path}"'
     cmd_buf = ctypes.create_unicode_buffer(command_line)
 
     si = STARTUPINFO()
@@ -389,7 +400,7 @@ def _launch_with_entry(entry_path: str, *, label: str,
             domain,
             password,
             LOGON_WITH_PROFILE,
-            VENV_PYTHON,
+            RUNTIME_PYTHON,
             cmd_buf,
             CREATE_UNICODE_ENVIRONMENT,
             None,
@@ -429,7 +440,7 @@ def _launch_with_entry(entry_path: str, *, label: str,
 
     return LaunchResult(
         label=label,
-        application_path=VENV_PYTHON,
+        application_path=RUNTIME_PYTHON,
         command_line=command_line,
         cwd=PROJECT_ROOT,
         logon_flags=LOGON_WITH_PROFILE,
