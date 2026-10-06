@@ -80,15 +80,15 @@ class GeminiProvider(LLMProvider):
                 contents.append(types.Content(role="model", parts=parts))
 
             elif m.role == "tool":
-                # Keep the function-call ID even on google-genai versions where
-                # Part.from_function_response() does not accept an id argument.
+                # Gemini's content protocol accepts model and user roles here;
+                # function responses are sent as user content parts.
                 function_response = types.FunctionResponse(
                     name=m.tool_name,
                     response=m.tool_result,
                     id=m.tool_call_id or None,
                 )
                 contents.append(types.Content(
-                    role="tool",
+                    role="user",
                     parts=[types.Part(function_response=function_response)],
                 ))
             else:
