@@ -9,7 +9,7 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $RuntimeName = 'LumiRuntime'
-$ProjectRoot = 'D:\Lumi'
+$ProjectRoot = 'D:\\Lumi'
 $icacls = Get-Command icacls.exe -ErrorAction SilentlyContinue
 
 Write-Output "=== LumiRuntime + control-plane ACL verification ==="
@@ -24,7 +24,7 @@ Write-Output "  Enabled: $($u.Enabled)"
 
 $admins = Get-LocalGroupMember -Group 'Administrators'
 $isAdmin = $admins | Where-Object {
-    $_.Name -ieq "$env:COMPUTERNAME\$RuntimeName" -or $_.SID.Value -eq $sid
+    $_.Name -ieq "$env:COMPUTERNAME\\$RuntimeName" -or $_.SID.Value -eq $sid
 }
 if ($isAdmin) { Write-Output "FAIL: LumiRuntime IS in Administrators."; exit 1 }
 Write-Output "PASS: not in Administrators"
@@ -36,32 +36,32 @@ $protectedFiles = @(
     (Join-Path $ProjectRoot 'main.py'),
     (Join-Path $ProjectRoot 'config.py'),
     (Join-Path $ProjectRoot '.env'),
-    (Join-Path $ProjectRoot 'core\tool_router.py'),
-    (Join-Path $ProjectRoot 'tools\admin_tasks.py'),
-    (Join-Path $ProjectRoot 'tools\terminal_guard.py'),
-    (Join-Path $ProjectRoot 'storage\audit.py')
+    (Join-Path $ProjectRoot 'core\\tool_router.py'),
+    (Join-Path $ProjectRoot 'tools\\admin_tasks.py'),
+    (Join-Path $ProjectRoot 'tools\\terminal_guard.py'),
+    (Join-Path $ProjectRoot 'storage\\audit.py')
 )
 
 Write-Output ""
 Write-Output "Checking expected deny ACEs..."
 
-# icacls expands generic W when displaying an explicit deny ACE. On this
-# Windows build the resulting display is:
-#   files:      (W,D,WDAC,WO)
-#   directories:(W,D,WDAC,WO,DC)
-# This is expected because W is the stored generic-write permission. The
-# semantic protection is verified by the runtime probe below.
+# The ACL apply step creates explicit .NET FileSystemAccessRule entries with
+# specific mutation/security rights only. icacls displays those rights using
+# the following abbreviations and may reorder them during canonicalization:
+#   files:      (DENY)(DE,WO,WD,AD,WEA,WA)
+#   directories:(OI)(CI)(DENY)(DE,WO,WD,AD,WEA,DC,WA)
+# The semantic protection is verified by the runtime probe below.
 function Test-DenyAce {
     param([string]$AclText, [bool]$Directory)
 
-    $identity = [regex]::Escape("$env:COMPUTERNAME\$RuntimeName")
+    $identity = [regex]::Escape("$env:COMPUTERNAME\\$RuntimeName")
     if ($AclText -notmatch 'DENY' -or $AclText -notmatch $identity) { return $false }
 
     if ($Directory) {
-        return $AclText -match '\(DENY\)\(W,D,WDAC,WO,DC\)'
+        return $AclText -match '\\(OI\\)\\(CI\\)\\(DENY\\)\\(DE,WO,WD,AD,WEA,DC,WA\\)'
     }
 
-    return $AclText -match '\(DENY\)\(W,D,WDAC,WO\)'
+    return $AclText -match '\\(DENY\\)\\(DE,WO,WD,AD,WEA,WA\\)'
 }
 
 foreach ($p in $protectedDirs + $protectedFiles) {
@@ -82,9 +82,9 @@ foreach ($p in $protectedDirs + $protectedFiles) {
 }
 
 $repoRoot = $ProjectRoot
-$runtimePython = 'C:\Program Files\Python312\python.exe'
-$launcher = Join-Path $repoRoot 'scripts\launch_lumi_as_runtime.py'
-$probeResult = Join-Path $repoRoot 'workspace\phase5fb_acl_result.json'
+$runtimePython = 'C:\\Program Files\\Python312\\python.exe'
+$launcher = Join-Path $repoRoot 'scripts\\launch_lumi_as_runtime.py'
+$probeResult = Join-Path $repoRoot 'workspace\\phase5fb_acl_result.json'
 
 if (-not (Test-Path -LiteralPath $runtimePython)) {
     Write-Output "FAIL: dedicated LumiRuntime Python missing: $runtimePython"; exit 1
@@ -97,7 +97,7 @@ Remove-Item -LiteralPath $probeResult -Force -ErrorAction SilentlyContinue
 
 Write-Output ""
 Write-Output "Running fixed LumiRuntime ACL probe..."
-& $runtimePython -c "import sys; sys.path.insert(0, r'$repoRoot\scripts'); import launch_lumi_as_runtime as launcher; result = launcher.launch_acl_probe(); raise SystemExit(1 if (not result.create_ok or result.timed_out or result.exit_code != 0) else 0)"
+& $runtimePython -c "import sys; sys.path.insert(0, r'$repoRoot\\scripts'); import launch_lumi_as_runtime as launcher; result = launcher.launch_acl_probe(); raise SystemExit(1 if (not result.create_ok or result.timed_out or result.exit_code != 0) else 0)"
 if ($LASTEXITCODE -ne 0) {
     Write-Output "FAIL: LumiRuntime ACL probe failed."; exit 1
 }
