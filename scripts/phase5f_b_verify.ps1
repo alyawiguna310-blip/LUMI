@@ -71,26 +71,29 @@ foreach ($p in $protectedDirs + $protectedFiles) {
         exit 1
     }
 
-    # icacls normally renders the account name (DOMAIN\User), not the SID,
-    # so accept either representation while still requiring the exact deny
-    # permission tuple.
     $identityPresent = $aclText -match [regex]::Escape($sid) -or
         $aclText -match [regex]::Escape("$env:COMPUTERNAME\$RuntimeName")
 
+    # The deny ACE must contain mutation-specific rights only. In particular,
+    # generic W is intentionally rejected because it maps to READ_CONTROL and
+    # SYNCHRONIZE as well, which would block normal read opens.
+    if ($p -eq $protectedDirs[0]) {
+        $expectedRights = '(WD,AD,WEA,WA,DC,D,WDAC,WO)'
+    } else {
+        $expectedRights = '(WD,AD,WEA,WA,D,WDAC,WO)'
+    }
+
     if (-not $identityPresent -or
         $aclText -notmatch 'DENY' -or
-        $aclText -notmatch '\(W,D,WDAC,WO\)') {
-        Write-Output "FAIL: expected LumiRuntime deny ACE not found on: $p"
+        $aclText -notmatch [regex]::Escape($expectedRights)) {
+        Write-Output "FAIL: expected LumiRuntime mutation deny ACE not found on: $p"
+        Write-Output "Expected rights: $expectedRights"
         exit 1
     }
 
     Write-Output "PASS: deny ACE present: $p"
 }
 
-# The fixed launcher is intentionally the only way this verification
-# crosses the runtime identity boundary. The child tests actual effective
-# access: reads must work, protected writes must be denied, and the normal
-# workspace must remain writable.
 $repoRoot = $ProjectRoot
 $runtimePython = 'C:\Program Files\Python312\python.exe'
 $launcher = Join-Path $repoRoot 'scripts\launch_lumi_as_runtime.py'
@@ -166,8 +169,6 @@ if ($probe.username -ne $RuntimeName) {
     exit 1
 }
 
-# Remove the probe result using the human verifier identity. This is not an
-# ACL/security mutation; it only removes a test artifact from the workspace.
 Remove-Item -LiteralPath $probeResult -Force -ErrorAction SilentlyContinue
 
 Write-Output ""
