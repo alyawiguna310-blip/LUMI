@@ -131,6 +131,17 @@ TOOL_SPECS = {
         "optional": {"query": str},
         "types": {"query": str},
     },
+    "applications.launch": {
+        "name": "applications.launch",
+        "description": (
+            "Launch an already-installed desktop application by name. "
+            "No shell commands, scripts, URLs, or arbitrary command lines. "
+            "The application must resolve to an installed executable."
+        ),
+        "required": ["name"],
+        "optional": {},
+        "types": {"name": str},
+    },
     "applications.install": {
         "name": "applications.install",
         "description": (
