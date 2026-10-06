@@ -35,6 +35,10 @@ OPEN_EXISTING = 3
 FILE_ATTRIBUTE_NORMAL = 0x00000080
 INVALID_HANDLE_VALUE = wintypes.HANDLE(-1).value
 TOKEN_QUERY = 0x0008
+TOKEN_DUPLICATE = 0x0002
+TOKEN_IMPERSONATE = 0x0004
+SECURITY_IMPERSONATION = 2
+TOKEN_IMPERSONATION = 2
 OWNER_SECURITY_INFORMATION = 0x00000001
 GROUP_SECURITY_INFORMATION = 0x00000002
 DACL_SECURITY_INFORMATION = 0x00000004
@@ -78,6 +82,13 @@ _OpenProcessToken.argtypes = [
     wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE),
 ]
 _OpenProcessToken.restype = wintypes.BOOL
+
+_DuplicateTokenEx = _advapi32.DuplicateTokenEx
+_DuplicateTokenEx.argtypes = [
+    wintypes.HANDLE, wintypes.DWORD, wintypes.LPVOID,
+    wintypes.DWORD, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE),
+]
+_DuplicateTokenEx.restype = wintypes.BOOL
 
 _AccessCheck = _advapi32.AccessCheck
 _AccessCheck.argtypes = [
@@ -158,13 +169,34 @@ def _native_read_probe(path):
 
 def _access_check(path, desired_access):
     """Ask Windows AccessCheck for the current LumiRuntime token."""
-    token = wintypes.HANDLE()
-    if not _OpenProcessToken(_GetCurrentProcess(), TOKEN_QUERY, ctypes.byref(token)):
+    primary_token = wintypes.HANDLE()
+    if not _OpenProcessToken(
+        _GetCurrentProcess(),
+        TOKEN_QUERY | TOKEN_DUPLICATE | TOKEN_IMPERSONATE,
+        ctypes.byref(primary_token),
+    ):
         error = ctypes.get_last_error()
         return {"ok": False, "error": error, "message": ctypes.FormatError(error)}
 
+    impersonation_token = wintypes.HANDLE()
     try:
+        if not _DuplicateTokenEx(
+            primary_token,
+            TOKEN_QUERY | TOKEN_IMPERSONATE,
+            None,
+            SECURITY_IMPERSONATION,
+            TOKEN_IMPERSONATION,
+            ctypes.byref(impersonation_token),
+        ):
+            error = ctypes.get_last_error()
+            return {
+                "ok": False,
+                "error": error,
+                "message": ctypes.FormatError(error),
+            }
+
         needed = wintypes.DWORD()
+        ctypes.set_last_error(0)
         _GetFileSecurityW(
             path,
             OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
@@ -203,9 +235,10 @@ def _access_check(path, desired_access):
         granted = wintypes.DWORD()
         access_status = wintypes.BOOL()
 
+        ctypes.set_last_error(0)
         if not _AccessCheck(
             descriptor,
-            token,
+            impersonation_token,
             desired_access,
             ctypes.byref(mapping),
             privilege_buffer,
@@ -223,7 +256,9 @@ def _access_check(path, desired_access):
             "access_allowed": bool(access_status.value),
         }
     finally:
-        _CloseHandle(token)
+        if impersonation_token.value:
+            _CloseHandle(impersonation_token)
+        _CloseHandle(primary_token)
 
 
 def _test_file_read(path):
