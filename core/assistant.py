@@ -93,7 +93,7 @@ class Assistant:
                     role="assistant",
                     content=response.text or "",
                     tool_calls=response.tool_calls,
-                    source_provider=self.provider.name,
+                    source_provider=response.source_provider,
                     raw_parts=response.raw_parts,
                 ))
 
@@ -108,6 +108,7 @@ class Assistant:
                                         name=tc.name, result=result)
                     turn_messages.append(ChatMessage(
                         role="tool",
+                        tool_call_id=tc.id,
                         tool_name=tc.name,
                         tool_result=result,
                     ))
