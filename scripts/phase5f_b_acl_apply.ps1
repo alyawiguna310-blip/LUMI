@@ -19,7 +19,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $RuntimeName = 'LumiRuntime'
-$ProjectRoot = 'D:\Lumi'
+$ProjectRoot = 'D:Lumi'
 
 if (-not $Confirm) {
     Write-Output "Refusing without -Confirm."
@@ -41,7 +41,7 @@ if (-not $user) {
 
 $admins = Get-LocalGroupMember -Group 'Administrators' -ErrorAction Stop
 $isAdmin = $admins | Where-Object {
-    $_.Name -ieq "$env:COMPUTERNAME\$RuntimeName" -or
+    $_.Name -ieq "$env:COMPUTERNAME$RuntimeName" -or
     $_.SID.Value -eq $user.SID.Value
 }
 if ($isAdmin) {
@@ -57,11 +57,18 @@ $protectedFiles = @(
     (Join-Path $ProjectRoot 'main.py'),
     (Join-Path $ProjectRoot 'config.py'),
     (Join-Path $ProjectRoot '.env'),
-    (Join-Path $ProjectRoot 'core\tool_router.py'),
-    (Join-Path $ProjectRoot 'tools\admin_tasks.py'),
-    (Join-Path $ProjectRoot 'tools\terminal_guard.py'),
-    (Join-Path $ProjectRoot 'storage\audit.py')
+    (Join-Path $ProjectRoot 'core	ool_router.py'),
+    (Join-Path $ProjectRoot 'toolsadmin_tasks.py'),
+    (Join-Path $ProjectRoot 'tools	erminal_guard.py'),
+    (Join-Path $ProjectRoot 'storageaudit.py')
 )
+
+# Do not use the generic "W" right here. FILE_GENERIC_WRITE contains
+# READ_CONTROL and SYNCHRONIZE, which would unintentionally prevent the
+# runtime from opening protected files for read access. Deny only the
+# mutation rights required by the control-plane policy.
+$denyFileRights = 'WD,AD,WEA,WA,D,WDAC,WO'
+$denyDirectoryRights = 'WD,AD,WEA,WA,DC,DD,D,WDAC,WO'
 
 function Invoke-Icacls {
     param([string[]]$Arguments)
@@ -106,17 +113,19 @@ try {
 
     Write-Output "Applying LumiRuntime control-plane deny ACEs..."
     Write-Output "SID: $sid"
+    Write-Output "File deny rights: $denyFileRights"
+    Write-Output "Directory deny rights: $denyDirectoryRights"
 
     foreach ($p in $protectedDirs) {
         Invoke-Icacls -Arguments @(
-            $p, '/deny', ("*" + $sid + ":(OI)(CI)(W,D,WDAC,WO)")
+            $p, '/deny', ("*" + $sid + ":(" + $denyDirectoryRights + ")")
         )
     }
 
     foreach ($p in $protectedFiles) {
         if (Test-Path -LiteralPath $p) {
             Invoke-Icacls -Arguments @(
-                $p, '/deny', ("*" + $sid + ":(W,D,WDAC,WO)")
+                $p, '/deny', ("*" + $sid + ":(" + $denyFileRights + ")")
             )
         }
     }
@@ -124,9 +133,9 @@ try {
     Write-Output ""
     Write-Output "ACL enforcement commands completed."
     Write-Output "Run the read-only verifier next:"
-    Write-Output "  .\phase5f_b_verify.ps1"
+    Write-Output "  .phase5f_b_verify.ps1"
     Write-Output "Rollback command (explicit):"
-    Write-Output "  .\phase5f_b_acl_apply.ps1 -Confirm -Rollback"
+    Write-Output "  .phase5f_b_acl_apply.ps1 -Confirm -Rollback"
     exit 0
 }
 catch {
