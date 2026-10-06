@@ -133,6 +133,7 @@ class ProviderManager(LLMProvider):
             try:
                 logger.debug("Trying provider %s", entry.name)
                 result = entry.provider.chat(messages, max_tokens=max_tokens)
+                result.source_provider = entry.name
                 entry.mark_success()
                 logger.info("Provider %s succeeded", entry.name)
                 return result
