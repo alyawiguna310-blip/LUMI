@@ -6,6 +6,12 @@ Explicit Windows-side enforcement for the LumiRuntime control-plane ACL.
 Requires -Confirm. Requires an existing non-administrator LumiRuntime account.
 Changes only the discovered control-plane paths. The deny ACE blocks
 write/delete/ACL-owner changes while preserving read access.
+
+The ACL is applied with .NET FileSystemAccessRule instead of icacls symbolic
+rights because icacls can canonicalize a broad write mask in a way that
+causes AccessCheck/normal read opens to fail. The exact rights below contain
+only mutation/security-control rights and intentionally exclude
+ReadControl/Synchronize.
 #>
 
 [CmdletBinding()]
@@ -22,12 +28,6 @@ if (-not $Confirm) {
     Write-Output "Refusing without -Confirm."
     Write-Output "No ACL changes were made."
     exit 2
-}
-
-$icacls = Get-Command icacls.exe -ErrorAction SilentlyContinue
-if (-not $icacls) {
-    Write-Output "FAIL: icacls.exe was not found."
-    exit 1
 }
 
 $user = Get-LocalUser -Name $RuntimeName -ErrorAction SilentlyContinue
@@ -47,6 +47,8 @@ if ($isAdmin) {
 }
 
 $sid = $user.SID.Value
+$identity = New-Object System.Security.Principal.SecurityIdentifier($sid)
+
 $protectedDirs = @(
     (Join-Path $ProjectRoot 'security')
 )
@@ -60,19 +62,20 @@ $protectedFiles = @(
     (Join-Path $ProjectRoot 'storage/audit.py')
 )
 
-# Do not use generic "W": it includes standard rights such as
-# READ_CONTROL/SYNCHRONIZE. These masks deny mutation operations while
-# leaving ordinary read access available through the inherited Users RX ACE.
-$denyFileRights = 'WD,AD,WEA,WA,D,WDAC,WO'
-$denyDirectoryRights = 'WD,AD,WEA,WA,DC,D,WDAC,WO'
+# Exact mutation/security rights. Do not use GenericWrite or other broad
+# masks: they can include standard rights such as ReadControl/Synchronize.
+$denyFileRights =
+    [System.Security.AccessControl.FileSystemRights]::WriteData -bor
+    [System.Security.AccessControl.FileSystemRights]::AppendData -bor
+    [System.Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor
+    [System.Security.AccessControl.FileSystemRights]::WriteAttributes -bor
+    [System.Security.AccessControl.FileSystemRights]::Delete -bor
+    [System.Security.AccessControl.FileSystemRights]::WritePermissions -bor
+    [System.Security.AccessControl.FileSystemRights]::TakeOwnership
 
-function Invoke-Icacls {
-    param([string[]]$Arguments)
-    & $icacls.Source @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "icacls failed with exit code $LASTEXITCODE"
-    }
-}
+$denyDirectoryRights =
+    $denyFileRights -bor
+    [System.Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles
 
 function Verify-Path {
     param([string]$Path)
@@ -81,9 +84,61 @@ function Verify-Path {
     }
 }
 
+function Get-LumiRuntimeDenyRules {
+    param([System.Security.AccessControl.FileSystemSecurity]$Acl)
+
+    @($Acl.Access | Where-Object {
+        $_.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Deny -and
+        $_.IdentityReference.Value -ieq "$env:COMPUTERNAME\$RuntimeName"
+    })
+}
+
 function Remove-LumiRuntimeDeny {
     param([string]$Path)
-    Invoke-Icacls -Arguments @($Path, '/remove:d', ("*" + $sid))
+
+    $acl = Get-Acl -LiteralPath $Path
+    $rules = @(Get-LumiRuntimeDenyRules $acl)
+
+    foreach ($rule in $rules) {
+        [void]$acl.RemoveAccessRuleSpecific($rule)
+    }
+
+    if ($rules.Count -gt 0) {
+        Set-Acl -LiteralPath $Path -AclObject $acl
+    }
+}
+
+function Add-LumiRuntimeDeny {
+    param(
+        [string]$Path,
+        [bool]$IsDirectory
+    )
+
+    $acl = Get-Acl -LiteralPath $Path
+
+    if (@(Get-LumiRuntimeDenyRules $acl).Count -gt 0) {
+        throw "pre-existing LumiRuntime deny ACE found on $Path; refusing to modify existing deny state"
+    }
+
+    if ($IsDirectory) {
+        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+            $identity,
+            $denyDirectoryRights,
+            ([System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit),
+            [System.Security.AccessControl.PropagationFlags]::None,
+            [System.Security.AccessControl.AccessControlType]::Deny
+        )
+    }
+    else {
+        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+            $identity,
+            $denyFileRights,
+            [System.Security.AccessControl.AccessControlType]::Deny
+        )
+    }
+
+    [void]$acl.AddAccessRule($rule)
+    Set-Acl -LiteralPath $Path -AclObject $acl
 }
 
 try {
@@ -101,32 +156,24 @@ try {
     }
 
     Write-Output "Checking for pre-existing LumiRuntime deny ACEs..."
-
     foreach ($p in $protectedDirs + $protectedFiles) {
-        $aclText = (& $icacls.Source $p 2>&1 | Out-String)
-        if ($LASTEXITCODE -ne 0) {
-            throw "could not inspect ACL before applying: $p"
-        }
-        if ($aclText -match [regex]::Escape($sid) -and $aclText -match 'DENY') {
+        $acl = Get-Acl -LiteralPath $p
+        if (@(Get-LumiRuntimeDenyRules $acl).Count -gt 0) {
             throw "pre-existing LumiRuntime deny ACE found on $p; refusing to modify existing deny state"
         }
     }
 
     Write-Output "Applying LumiRuntime control-plane deny ACEs..."
     Write-Output "SID: $sid"
-    Write-Output "File deny rights: $denyFileRights"
-    Write-Output "Directory deny rights: $denyDirectoryRights"
+    Write-Output "Exact file deny rights: $denyFileRights"
+    Write-Output "Exact directory deny rights: $denyDirectoryRights"
 
     foreach ($p in $protectedDirs) {
-        Invoke-Icacls -Arguments @(
-            $p, '/deny', ("*" + $sid + ":(" + $denyDirectoryRights + ")")
-        )
+        Add-LumiRuntimeDeny -Path $p -IsDirectory $true
     }
 
     foreach ($p in $protectedFiles) {
-        Invoke-Icacls -Arguments @(
-            $p, '/deny', ("*" + $sid + ":(" + $denyFileRights + ")")
-        )
+        Add-LumiRuntimeDeny -Path $p -IsDirectory $false
     }
 
     Write-Output ""
@@ -141,7 +188,7 @@ catch {
     foreach ($p in $protectedDirs + $protectedFiles) {
         try {
             if (Test-Path -LiteralPath $p) {
-                Remove-LumiRuntimeDeny $p | Out-Null
+                Remove-LumiRuntimeDeny $p
             }
         } catch {
             Write-Output "ROLLBACK WARNING: could not clean deny ACE from $p"
