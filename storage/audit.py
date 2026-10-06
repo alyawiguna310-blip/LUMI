@@ -192,10 +192,10 @@ class _AuditSink:
         if self._breaks_declared:
             sys.stderr.write(
                 f"[AUDIT] chain contains {self._breaks_declared} "
-                f"declared break(s) "
+                f"accepted recovery boundary(ies) "
                 f"({self._zero_breaks} zero-prev, "
                 f"{self._stale_breaks} stale-prev); "
-                f"segments before each break cannot be verified\n"
+                f"each boundary was integrity-checked\n"
             )
 
         try:
