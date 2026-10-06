@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 
 PROJECT_ROOT = r"D:\Lumi"
 SECURITY_DIR = os.path.join(PROJECT_ROOT, "security")
@@ -47,6 +46,18 @@ def _test_directory_create():
         return False, "directory create was allowed"
 
 
+def _test_file_read(path):
+    try:
+        if os.path.isdir(path):
+            os.listdir(path)
+        else:
+            with open(path, "rb") as f:
+                f.read(1)
+        return True, "read permitted"
+    except Exception as exc:
+        return False, f"read failed: {type(exc).__name__}: {exc}"
+
+
 def _test_file_write_open(path):
     try:
         fd = os.open(path, os.O_WRONLY)
@@ -77,7 +88,16 @@ def _test_workspace_write():
 def main():
     checks = {}
 
-    checks["security_directory_create"] = _test_directory_create()\n\n    for label, path in (\n        ("main_py_read", MAIN_PATH),\n        ("env_read", ENV_PATH),\n        ("security_directory_read", SECURITY_DIR),\n    ):\n        checks[label] = _test_file_read(path) if os.path.isfile(path) else (True, "directory read/listing is permitted by normal path access") if os.path.isdir(path) else (False, "target does not exist")
+    checks["security_directory_create"] = _test_directory_create()
+
+    for label, path in (
+        ("main_py_read", MAIN_PATH),
+        ("env_read", ENV_PATH),
+        ("security_directory_read", SECURITY_DIR),
+    ):
+        checks[label] = _test_file_read(path) if os.path.isfile(path) else (
+            True, "directory read/listing is permitted by normal path access"
+        ) if os.path.isdir(path) else (False, "target does not exist")
 
     for label, path in (
         ("main_py_write_open", MAIN_PATH),
@@ -108,7 +128,6 @@ def main():
         return 2
 
     print(json.dumps(result, sort_keys=True))
-    sys.stdout.flush()
     return 0 if result["passed"] else 1
 
 
