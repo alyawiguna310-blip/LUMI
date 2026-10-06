@@ -71,7 +71,13 @@ foreach ($p in $protectedDirs + $protectedFiles) {
         exit 1
     }
 
-    if ($aclText -notmatch [regex]::Escape($sid) -or
+    # icacls normally renders the account name (DOMAIN\User), not the SID,
+    # so accept either representation while still requiring the exact deny
+    # permission tuple.
+    $identityPresent = $aclText -match [regex]::Escape($sid) -or
+        $aclText -match [regex]::Escape("$env:COMPUTERNAME\$RuntimeName")
+
+    if (-not $identityPresent -or
         $aclText -notmatch 'DENY' -or
         $aclText -notmatch '\(W,D,WDAC,WO\)') {
         Write-Output "FAIL: expected LumiRuntime deny ACE not found on: $p"
