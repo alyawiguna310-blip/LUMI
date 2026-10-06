@@ -1,7 +1,7 @@
 <#
 phase5f_d_runtime_check.ps1
 
-Read-only preflight for the dedicated LumiRuntime Python runtime.
+Read-only preflight for the machine-wide Python runtime used by LumiRuntime.
 Does not modify accounts, ACLs, the existing .venv, or project files.
 
 Required production runtime:
@@ -16,8 +16,8 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $RuntimeName = 'LumiRuntime'
-$RuntimeRoot = 'C:\Program Files\LumiRuntime'
-$RuntimePython = Join-Path $RuntimeRoot 'Python312\python.exe'
+$RuntimeRoot = 'C:\Program Files\Python312'
+$RuntimePython = Join-Path $RuntimeRoot 'python.exe'
 
 Write-Output "=== LumiRuntime production-runtime preflight ==="
 
@@ -39,13 +39,13 @@ if ($isAdmin) {
 Write-Output "PASS: LumiRuntime exists and is not an Administrator."
 
 if (-not (Test-Path -LiteralPath $RuntimePython -PathType Leaf)) {
-    Write-Output "FAIL: dedicated Python runtime is missing:"
+    Write-Output "FAIL: machine-wide Python runtime is missing:"
     Write-Output "  $RuntimePython"
     Write-Output ""
     Write-Output "Use the existing machine-wide Python 3.12 installation at this exact path before continuing."
     exit 1
 }
-Write-Output "PASS: dedicated Python runtime exists."
+Write-Output "PASS: machine-wide Python runtime exists."
 
 $acl = (& icacls.exe $RuntimePython 2>&1 | Out-String)
 if ($LASTEXITCODE -ne 0) {
