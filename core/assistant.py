@@ -8,6 +8,7 @@ from config import config
 from core.events import EventBus
 from core.memory import ConversationMemory
 from core.state import LumiState, StateManager
+from ui.notifications import NotificationManager
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ class Assistant:
         self.tts = tts
         self.tts_voice = tts_voice
         self.tool_router = tool_router
+        self.notifications = NotificationManager()
         self._busy = threading.Lock()
 
     # ---------- Public ----------
@@ -73,6 +75,8 @@ class Assistant:
             turn_messages.extend(self.memory.get_all())
 
             final_text: str | None = None
+            successful_tool_calls = 0
+            fix_applied = False
 
             for round_num in range(MAX_TOOL_ROUNDS):
                 response = self.provider.chat(
@@ -104,6 +108,10 @@ class Assistant:
                                         name=tc.name, arguments=tc.arguments)
                     result = self.tool_router.route(tc.name, tc.arguments)
                     logger.info("Tool result: %s", result)
+                    if isinstance(result, dict) and result.get("ok"):
+                        successful_tool_calls += 1
+                        if tc.name == "filesystem.write":
+                            fix_applied = True
                     self.event_bus.emit("tool_call_completed",
                                         name=tc.name, result=result)
                     turn_messages.append(ChatMessage(
@@ -118,6 +126,19 @@ class Assistant:
 
             if not final_text:
                 final_text = "..."
+
+            # Notify only after a successful code fix or a multi-tool batch.
+            # Notifications are informational and never grant tool permission.
+            if fix_applied:
+                self.notifications.notify(
+                    "Lumi — Fix applied",
+                    "The requested code fix was applied successfully.",
+                )
+            elif successful_tool_calls >= 3:
+                self.notifications.notify(
+                    "Lumi — Task batch complete",
+                    f"Finished {successful_tool_calls} tool tasks successfully.",
+                )
 
             # Persist only the final exchange in long-term memory
             self.memory.add(ChatMessage(role="assistant", content=final_text))
