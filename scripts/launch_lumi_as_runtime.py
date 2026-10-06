@@ -82,8 +82,21 @@ TEST2_DIAG_PATH = os.path.join(PROJECT_ROOT, "diag.txt")
 # ------------------------------------------------------------------ Win32
 
 
-_adv32 = ctypes.WinDLL("advapi32", use_last_error=True)
-_k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+# Win32 bindings are initialized lazily so the module can be imported
+# and statically tested on Linux. Windows execution still fails closed if
+# the required APIs cannot be loaded.
+_adv32 = None
+_k32 = None
+
+def _require_windows_api():
+    global _adv32, _k32
+    if sys.platform != "win32":
+        raise RuntimeError("LumiRuntime launcher is Windows-only")
+    if _adv32 is None:
+        _adv32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    if _k32 is None:
+        _k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    return _adv32, _k32
 
 CRED_TYPE_GENERIC = 1
 
@@ -248,6 +261,7 @@ class LaunchResult:
 def read_credential_password(target: str) -> str:
     """Return the password stored in Windows Credential Manager for
     `target`. Raises RuntimeError on failure. Never logs the value."""
+    _require_windows_api()
     cred_ptr = PCREDENTIAL()
     ok = _adv32.CredReadW(target, CRED_TYPE_GENERIC, 0, ctypes.byref(cred_ptr))
     if not ok:
@@ -337,6 +351,7 @@ def _launch_with_entry(entry_path: str, *, label: str,
     CreateProcessWithLogonW and is cleared from local scope in a finally
     block before any return path.
     """
+    _require_windows_api()
     _check_prereqs(entry_path)
 
     domain = os.environ.get("COMPUTERNAME", "")
@@ -429,6 +444,7 @@ def _launch_system_python_with_entry(
 
     Delete with the rest of the system-Python diagnostic.
     """
+    _require_windows_api()
     _check_prereqs(entry_path, python_executable=python_executable)
 
     domain = os.environ.get("COMPUTERNAME", "")
