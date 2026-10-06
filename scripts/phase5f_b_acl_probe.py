@@ -23,28 +23,70 @@ RESULT_PATH = os.path.join(WORKSPACE_DIR, "phase5fb_acl_result.json")
 CREATE_TEST_PATH = os.path.join(SECURITY_DIR, "_phase5fb_acl_probe.tmp")
 
 GENERIC_READ = 0x80000000
+GENERIC_WRITE = 0x40000000
+FILE_GENERIC_READ = 0x120089
+FILE_GENERIC_WRITE = 0x120116
+FILE_GENERIC_EXECUTE = 0x1200A0
+FILE_ALL_ACCESS = 0x1F01FF
 FILE_SHARE_READ = 0x00000001
 FILE_SHARE_WRITE = 0x00000002
 FILE_SHARE_DELETE = 0x00000004
 OPEN_EXISTING = 3
 FILE_ATTRIBUTE_NORMAL = 0x00000080
 INVALID_HANDLE_VALUE = wintypes.HANDLE(-1).value
+TOKEN_QUERY = 0x0008
+OWNER_SECURITY_INFORMATION = 0x00000001
+GROUP_SECURITY_INFORMATION = 0x00000002
+DACL_SECURITY_INFORMATION = 0x00000004
+ERROR_INSUFFICIENT_BUFFER = 122
+
+class GENERIC_MAPPING(ctypes.Structure):
+    _fields_ = [
+        ("GenericRead", wintypes.DWORD),
+        ("GenericWrite", wintypes.DWORD),
+        ("GenericExecute", wintypes.DWORD),
+        ("GenericAll", wintypes.DWORD),
+    ]
 
 _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+_advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+
 _CreateFileW = _kernel32.CreateFileW
 _CreateFileW.argtypes = [
-    wintypes.LPCWSTR,
-    wintypes.DWORD,
-    wintypes.DWORD,
-    wintypes.LPVOID,
-    wintypes.DWORD,
-    wintypes.DWORD,
-    wintypes.HANDLE,
+    wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+    wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
 ]
 _CreateFileW.restype = wintypes.HANDLE
+
 _CloseHandle = _kernel32.CloseHandle
 _CloseHandle.argtypes = [wintypes.HANDLE]
 _CloseHandle.restype = wintypes.BOOL
+
+_GetCurrentProcess = _kernel32.GetCurrentProcess
+_GetCurrentProcess.argtypes = []
+_GetCurrentProcess.restype = wintypes.HANDLE
+
+_GetFileSecurityW = _advapi32.GetFileSecurityW
+_GetFileSecurityW.argtypes = [
+    wintypes.LPCWSTR, wintypes.DWORD, wintypes.LPVOID,
+    wintypes.DWORD, ctypes.POINTER(wintypes.DWORD),
+]
+_GetFileSecurityW.restype = wintypes.BOOL
+
+_OpenProcessToken = _advapi32.OpenProcessToken
+_OpenProcessToken.argtypes = [
+    wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE),
+]
+_OpenProcessToken.restype = wintypes.BOOL
+
+_AccessCheck = _advapi32.AccessCheck
+_AccessCheck.argtypes = [
+    wintypes.LPVOID, wintypes.HANDLE, wintypes.DWORD,
+    ctypes.POINTER(GENERIC_MAPPING), wintypes.LPVOID,
+    ctypes.POINTER(wintypes.DWORD), ctypes.POINTER(wintypes.DWORD),
+    ctypes.POINTER(wintypes.BOOL),
+]
+_AccessCheck.restype = wintypes.BOOL
 
 
 def _write_result(result):
@@ -114,8 +156,79 @@ def _native_read_probe(path):
     return {"allowed": True, "winerror": 0, "message": "CreateFileW read handle opened"}
 
 
+def _access_check(path, desired_access):
+    """Ask Windows AccessCheck for the current LumiRuntime token."""
+    token = wintypes.HANDLE()
+    if not _OpenProcessToken(_GetCurrentProcess(), TOKEN_QUERY, ctypes.byref(token)):
+        error = ctypes.get_last_error()
+        return {"ok": False, "error": error, "message": ctypes.FormatError(error)}
+
+    try:
+        needed = wintypes.DWORD()
+        _GetFileSecurityW(
+            path,
+            OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+            None,
+            0,
+            ctypes.byref(needed),
+        )
+        error = ctypes.get_last_error()
+        if not needed.value or error != ERROR_INSUFFICIENT_BUFFER:
+            return {
+                "ok": False,
+                "error": error,
+                "message": ctypes.FormatError(error),
+            }
+
+        descriptor = ctypes.create_string_buffer(needed.value)
+        returned = wintypes.DWORD()
+        if not _GetFileSecurityW(
+            path,
+            OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+            descriptor,
+            needed.value,
+            ctypes.byref(returned),
+        ):
+            error = ctypes.get_last_error()
+            return {"ok": False, "error": error, "message": ctypes.FormatError(error)}
+
+        mapping = GENERIC_MAPPING(
+            FILE_GENERIC_READ,
+            FILE_GENERIC_WRITE,
+            FILE_GENERIC_EXECUTE,
+            FILE_ALL_ACCESS,
+        )
+        privilege_buffer = ctypes.create_string_buffer(4096)
+        privilege_length = wintypes.DWORD(len(privilege_buffer))
+        granted = wintypes.DWORD()
+        access_status = wintypes.BOOL()
+
+        if not _AccessCheck(
+            descriptor,
+            token,
+            desired_access,
+            ctypes.byref(mapping),
+            privilege_buffer,
+            ctypes.byref(privilege_length),
+            ctypes.byref(granted),
+            ctypes.byref(access_status),
+        ):
+            error = ctypes.get_last_error()
+            return {"ok": False, "error": error, "message": ctypes.FormatError(error)}
+
+        return {
+            "ok": True,
+            "desired_access": desired_access,
+            "granted_access": granted.value,
+            "access_allowed": bool(access_status.value),
+        }
+    finally:
+        _CloseHandle(token)
+
+
 def _test_file_read(path):
     native = _native_read_probe(path)
+    effective = _access_check(path, FILE_GENERIC_READ)
     try:
         readable = os.access(path, os.R_OK)
         if os.path.isdir(path):
@@ -123,7 +236,7 @@ def _test_file_read(path):
         else:
             with open(path, "rb") as f:
                 f.read(1)
-        return True, f"read permitted; os.access(R_OK)={readable}; native={json.dumps(native, sort_keys=True)}"
+        return True, f"read permitted; os.access(R_OK)={readable}; native={json.dumps(native, sort_keys=True)}; effective={json.dumps(effective, sort_keys=True)}"
     except OSError as exc:
         detail = {
             "type": type(exc).__name__,
@@ -133,10 +246,11 @@ def _test_file_read(path):
             "filename": exc.filename,
             "access_r": os.access(path, os.R_OK),
             "native": native,
+            "effective_read": effective,
         }
         return False, f"read failed: {json.dumps(detail, sort_keys=True)}"
     except Exception as exc:
-        return False, f"read failed: {type(exc).__name__}: {exc}; native={json.dumps(native, sort_keys=True)}"
+        return False, f"read failed: {type(exc).__name__}: {exc}; native={json.dumps(native, sort_keys=True)}; effective={json.dumps(effective, sort_keys=True)}"
 
 
 def _test_file_write_open(path):
