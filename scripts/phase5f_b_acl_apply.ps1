@@ -79,6 +79,14 @@ function Verify-Path {
 }
 
 try {
+    # .env is a control-plane path even though it is intentionally untracked.
+    # Create an empty placeholder as Administrator so LumiRuntime cannot later
+    # create or replace the security configuration itself.
+    $envPath = Join-Path $ProjectRoot '.env'
+    if (-not (Test-Path -LiteralPath $envPath)) {
+        New-Item -ItemType File -Path $envPath -Force | Out-Null
+    }
+
     foreach ($p in $protectedDirs + $protectedFiles) {
         Verify-Path $p
     }
