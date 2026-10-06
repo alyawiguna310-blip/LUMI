@@ -60,10 +60,11 @@ $protectedFiles = @(
     (Join-Path $ProjectRoot 'storage/audit.py')
 )
 
-# icacls symbolic rights such as "W" are generic rights and can include
-# READ_CONTROL/SYNCHRONIZE. Use explicit standard/object rights instead.
+# Do not use generic "W": it includes standard rights such as
+# READ_CONTROL/SYNCHRONIZE. These masks deny mutation operations while
+# leaving ordinary read access available through the inherited Users RX ACE.
 $denyFileRights = 'WD,AD,WEA,WA,D,WDAC,WO'
-$denyDirectoryRights = 'WD,AD,WEA,WA,DC,DD,D,WDAC,WO'
+$denyDirectoryRights = 'WD,AD,WEA,WA,DC,D,WDAC,WO'
 
 function Invoke-Icacls {
     param([string[]]$Arguments)
