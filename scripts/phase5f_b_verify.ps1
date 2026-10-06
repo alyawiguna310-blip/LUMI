@@ -92,12 +92,13 @@ foreach ($p in $protectedDirs + $protectedFiles) {
 # access: reads must work, protected writes must be denied, and the normal
 # workspace must remain writable.
 $repoRoot = $ProjectRoot
-$python = Join-Path $repoRoot '.venv\Scripts\python.exe'
+$runtimePython = 'C:\Program Files\LumiRuntime\Python312\python.exe'
 $launcher = Join-Path $repoRoot 'scripts\launch_lumi_as_runtime.py'
 $probeResult = Join-Path $repoRoot 'workspace\phase5fb_acl_result.json'
 
-if (-not (Test-Path -LiteralPath $python)) {
-    Write-Output "FAIL: venv Python missing: $python"
+if (-not (Test-Path -LiteralPath $runtimePython)) {
+    Write-Output "FAIL: dedicated LumiRuntime Python missing: $runtimePython"
+    Write-Output "Install a machine-wide Python 3.12 runtime at the exact path above, then retry."
     exit 1
 }
 if (-not (Test-Path -LiteralPath $launcher)) {
@@ -114,7 +115,7 @@ try {
 
 Write-Output ""
 Write-Output "Running fixed LumiRuntime ACL probe..."
-& $python -c "import sys; sys.path.insert(0, r'$repoRoot\scripts'); import launch_lumi_as_runtime as launcher; result = launcher.launch_acl_probe(); raise SystemExit(1 if (not result.create_ok or result.timed_out or result.exit_code != 0) else 0)"
+& $runtimePython -c "import sys; sys.path.insert(0, r'$repoRoot\scripts'); import launch_lumi_as_runtime as launcher; result = launcher.launch_acl_probe(); raise SystemExit(1 if (not result.create_ok or result.timed_out or result.exit_code != 0) else 0)"
 if ($LASTEXITCODE -ne 0) {
     Write-Output "FAIL: LumiRuntime ACL probe failed."
     exit 1
