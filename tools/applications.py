@@ -3,9 +3,11 @@
 Security model:
   - search / list: SAFE; launch: NORMAL; install: DESTRUCTIVE.
   - launch never accepts shell syntax or arbitrary command lines.
-  - launch resolves an installed application by Windows uninstall metadata or PATH.
+  - launch resolves an installed application by Windows metadata, known
+    per-user locations, or PATH.
 """
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -39,8 +41,10 @@ LAUNCH_SPEC = ToolSpec(
     path_params=[],
     description=(
         "Launch an already-installed desktop application by name. "
-        "No shell commands, scripts, URLs, or arbitrary command lines. "
-        "The application must resolve to an installed executable."
+        "Use this directly when the user says open, run, start, or launch "
+        "an installed app. No shell commands, scripts, URLs, or arbitrary "
+        "command lines. The application must resolve to a known installed "
+        "executable."
     ),
 )
 
@@ -62,6 +66,18 @@ FORBIDDEN_ID_PATTERNS = (
 REMOTE_ACCESS_WARN = {
     "teamviewer.teamviewer", "anydesk.anydesk", "rustdesk.rustdesk",
     "logmein.logmein", "gotomypc", "screenconnect", "supremo", "dwservice",
+}
+
+# Common friendly names -> executable names/locations. These are fixed
+# application identities, not paths supplied by the model.
+KNOWN_APP_ALIASES = {
+    "lunar": "lunar_client",
+    "lunarclient": "lunar_client",
+    "lunarclientlauncher": "lunar_client",
+    "roblox": "roblox",
+    "robloxplayer": "roblox",
+    "robloxplayerbeta": "roblox",
+    "vscodium": "vscodium",
 }
 
 def _winget_path() -> str | None:
@@ -145,50 +161,149 @@ def _do_list_installed(args: dict) -> dict:
 def _norm(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", value.lower())
 
+def _existing_executable(candidate: Path) -> str | None:
+    try:
+        if candidate.is_file() and candidate.suffix.lower() == ".exe":
+            return str(candidate.resolve())
+    except OSError:
+        pass
+    return None
+
 def _registry_applications():
-    roots = (
-        (winreg.HKEY_CURRENT_USER,
-         r"Software\Microsoft\Windows\CurrentVersion\Uninstall"),
-        (winreg.HKEY_LOCAL_MACHINE,
-         r"Software\Microsoft\Windows\CurrentVersion\Uninstall"),
-    )
-    for root, subkey in roots:
+    subkey = r"Software\Microsoft\Windows\CurrentVersion\Uninstall"
+    views = (0, getattr(winreg, "KEY_WOW64_64KEY", 0),
+             getattr(winreg, "KEY_WOW64_32KEY", 0))
+    seen = set()
+
+    for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        for view in views:
+            try:
+                with winreg.OpenKey(root, subkey, 0,
+                                    winreg.KEY_READ | view) as key:
+                    for i in range(winreg.QueryInfoKey(key)[0]):
+                        try:
+                            child = winreg.EnumKey(key, i)
+                            with winreg.OpenKey(key, child) as item:
+                                name = winreg.QueryValueEx(item, "DisplayName")[0]
+                                try:
+                                    location = winreg.QueryValueEx(
+                                        item, "InstallLocation"
+                                    )[0]
+                                except OSError:
+                                    location = ""
+                                if isinstance(name, str):
+                                    marker = (name, str(location or "").lower())
+                                    if marker not in seen:
+                                        seen.add(marker)
+                                        yield name, str(location or "")
+                        except OSError:
+                            continue
+            except OSError:
+                continue
+
+def _registry_app_paths() -> list[tuple[str, str]]:
+    """Return executable paths registered through Windows App Paths."""
+    subkey = r"Software\Microsoft\Windows\CurrentVersion\App Paths"
+    views = (0, getattr(winreg, "KEY_WOW64_64KEY", 0),
+             getattr(winreg, "KEY_WOW64_32KEY", 0))
+    results = []
+    seen = set()
+
+    for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        for view in views:
+            try:
+                with winreg.OpenKey(root, subkey, 0,
+                                    winreg.KEY_READ | view) as key:
+                    for i in range(winreg.QueryInfoKey(key)[0]):
+                        try:
+                            child = winreg.EnumKey(key, i)
+                            with winreg.OpenKey(key, child) as item:
+                                value = winreg.QueryValueEx(item, "")[0]
+                                if not isinstance(value, str):
+                                    continue
+                                exe = Path(value.strip('"'))
+                                if exe.suffix.lower() != ".exe":
+                                    continue
+                                marker = (child.lower(), str(exe).lower())
+                                if marker not in seen:
+                                    seen.add(marker)
+                                    results.append((child, str(exe)))
+                        except OSError:
+                            continue
+            except OSError:
+                continue
+    return results
+
+def _known_application_candidates(alias: str) -> list[Path]:
+    """Return only fixed, per-user locations for known launchers."""
+    local = Path(os.environ.get("LOCALAPPDATA", ""))
+    appdata = Path(os.environ.get("APPDATA", ""))
+    candidates: list[Path] = []
+
+    if alias == "lunar_client":
+        candidates += [
+            local / "Programs" / "lunarclient" / "Lunar Client.exe",
+            local / "Programs" / "Lunar Client" / "Lunar Client.exe",
+            local / "LunarClient" / "Lunar Client.exe",
+        ]
+
+    elif alias == "roblox":
+        # Roblox changes the version directory on updates. Only inspect the
+        # fixed Roblox Versions directory; never recurse through arbitrary
+        # user directories.
+        versions = local / "Roblox" / "Versions"
         try:
-            with winreg.OpenKey(root, subkey) as key:
-                for i in range(winreg.QueryInfoKey(key)[0]):
-                    try:
-                        child = winreg.EnumKey(key, i)
-                        with winreg.OpenKey(key, child) as item:
-                            name = winreg.QueryValueEx(item, "DisplayName")[0]
-                            try:
-                                location = winreg.QueryValueEx(
-                                    item, "InstallLocation"
-                                )[0]
-                            except OSError:
-                                location = ""
-                            if isinstance(name, str):
-                                yield name, str(location or "")
-                    except OSError:
-                        continue
+            dirs = [p for p in versions.iterdir() if p.is_dir()]
+            dirs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            for directory in dirs[:12]:
+                candidates.append(directory / "RobloxPlayerBeta.exe")
+                candidates.append(directory / "RobloxPlayerLauncher.exe")
         except OSError:
-            continue
+            pass
+
+    elif alias == "vscodium":
+        candidates += [
+            local / "Programs" / "VSCodium" / "VSCodium.exe",
+            appdata / "VSCodium" / "VSCodium.exe",
+        ]
+
+    return candidates
 
 def _resolve_installed_app(name: str) -> tuple[str | None, str | None]:
     query = name.strip()
     if not query:
         return None, "application name must be non-empty"
     if len(query) > 100 or any(
-        ch in query for ch in "\\/:;&|$<>\r\n"
+        ch in query for ch in "\/:;&|$<>\r\n"
     ):
         return None, "application name contains disallowed characters"
 
     normalized = _norm(query)
+    alias = KNOWN_APP_ALIASES.get(normalized)
 
+    # 1. PATH is still the fastest and most generic safe resolver.
     for candidate in (query, query + ".exe"):
         found = shutil.which(candidate)
         if found and Path(found).is_file():
             return str(Path(found).resolve()), None
 
+    # 2. Fixed known locations handle per-user launchers such as Lunar/Roblox.
+    if alias:
+        for candidate in _known_application_candidates(alias):
+            found = _existing_executable(candidate)
+            if found:
+                return found, None
+
+    # 3. Windows App Paths handles applications that don't expose an
+    # InstallLocation but do register their executable.
+    for display_name, executable in _registry_app_paths():
+        stem = _norm(Path(display_name).stem)
+        if stem == normalized or normalized in stem:
+            found = _existing_executable(Path(executable))
+            if found:
+                return found, None
+
+    # 4. Standard uninstall metadata, including both registry views.
     for display_name, location in _registry_applications():
         display_norm = _norm(display_name)
         if display_norm != normalized and normalized not in display_norm:
@@ -203,12 +318,13 @@ def _resolve_installed_app(name: str) -> tuple[str | None, str | None]:
             root / f"{query}.exe",
             root / f"{display_name}.exe",
         ]
-        if normalized == "vscodium":
+        if alias == "vscodium":
             candidates += [root / "VSCodium.exe", root / "codium.exe"]
 
         for candidate in candidates:
-            if candidate.is_file() and candidate.suffix.lower() == ".exe":
-                return str(candidate.resolve()), None
+            found = _existing_executable(candidate)
+            if found:
+                return found, None
 
     return None, f"installed application not found: {query!r}"
 
