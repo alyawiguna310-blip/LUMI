@@ -64,6 +64,7 @@ PROJECT_ROOT = r"D:\Lumi"
 VENV_PYTHON = os.path.join(PROJECT_ROOT, ".venv", "Scripts", "python.exe")
 ENTRY = os.path.join(PROJECT_ROOT, "main.py")
 PROBE_ENTRY = os.path.join(PROJECT_ROOT, "scripts", "_phase5fc_probe.py")
+ACL_PROBE_ENTRY = os.path.join(PROJECT_ROOT, "scripts", "phase5f_b_acl_probe.py")
 # Temporary: venv-Python minimal diagnostic. Delete with
 # scripts/_phase5fc_minimal.py after the investigation.
 MINIMAL_ENTRY = os.path.join(
@@ -554,6 +555,15 @@ def launch() -> int:
         )
     return 0
 
+
+
+def launch_acl_probe() -> LaunchResult:
+    """Launch the fixed Phase 5F-B OS ACL probe under LumiRuntime.
+
+    Takes no arguments. Waits up to 30 seconds and returns a LaunchResult.
+    The child performs only fixed, non-destructive permission checks.
+    """
+    return _launch_with_entry(ACL_PROBE_ENTRY, label="acl-probe", wait_seconds=30)
 
 def launch_probe() -> LaunchResult:
     """Launch the fixed Phase 5F-C identity probe under LumiRuntime.
