@@ -381,7 +381,7 @@ def _launch_with_entry(entry_path: str, *, label: str,
     user = RUNTIME_USERNAME
     password = read_credential_password(CRED_TARGET)
 
-    command_line = f'"{RUNTIME_PYTHON}" "{entry_path}"'
+    command_line = f'"{RUNTIME_PYTHON}" "{entry_path}"'  # VENV_PYTHON remains diagnostic-only
     cmd_buf = ctypes.create_unicode_buffer(command_line)
 
     si = STARTUPINFO()
