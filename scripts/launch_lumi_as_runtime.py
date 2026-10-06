@@ -64,8 +64,8 @@ PROJECT_ROOT = r"D:\Lumi"
 # Production runtime: machine-wide and outside the mutable project tree.
 # LumiRuntime must have read/execute access only; it must not be able to
 # modify the interpreter or its libraries.
-RUNTIME_ROOT = r"C:\Program Files\LumiRuntime"
-RUNTIME_PYTHON = os.path.join(RUNTIME_ROOT, "Python312", "python.exe")
+RUNTIME_ROOT = r"C:\Program Files\Python312"
+RUNTIME_PYTHON = os.path.join(RUNTIME_ROOT, "python.exe")
 # Temporary: the project venv is retained only for human-side diagnostics.
 VENV_PYTHON = os.path.join(PROJECT_ROOT, ".venv", "Scripts", "python.exe")
 ENTRY = os.path.join(PROJECT_ROOT, "main.py")
