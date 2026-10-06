@@ -80,13 +80,16 @@ class GeminiProvider(LLMProvider):
                 contents.append(types.Content(role="model", parts=parts))
 
             elif m.role == "tool":
+                # Keep the function-call ID even on google-genai versions where
+                # Part.from_function_response() does not accept an id argument.
+                function_response = types.FunctionResponse(
+                    name=m.tool_name,
+                    response=m.tool_result,
+                    id=m.tool_call_id or None,
+                )
                 contents.append(types.Content(
                     role="tool",
-                    parts=[types.Part.from_function_response(
-                        name=m.tool_name,
-                        response=m.tool_result,
-                        id=m.tool_call_id or None,
-                    )],
+                    parts=[types.Part(function_response=function_response)],
                 ))
             else:
                 logger.warning("Unknown role %r; skipping.", m.role)
