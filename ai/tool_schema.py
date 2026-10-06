@@ -164,6 +164,18 @@ TOOL_SPECS = {
         "optional": {},
         "types": {"path": str},
     },
+    "gold.analyze": {
+        "name": "gold.analyze",
+        "description": (
+            "Analyze public gold-market data mathematically. Returns an "
+            "approximate IDR/gram benchmark plus SMA, EMA, momentum, RSI, "
+            "volatility, trend and a transparent signal score. Read-only. "
+            "This is analysis, not a prediction or trading instruction."
+        ),
+        "required": [],
+        "optional": {"history_days": int},
+        "types": {"history_days": int},
+    },
     "applications.install": {
         "name": "applications.install",
         "description": (
