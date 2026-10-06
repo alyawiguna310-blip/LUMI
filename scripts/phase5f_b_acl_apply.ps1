@@ -79,14 +79,6 @@ function Verify-Path {
 }
 
 try {
-    # .env is a control-plane path even though it is intentionally untracked.
-    # Create an empty placeholder as Administrator so LumiRuntime cannot later
-    # create or replace the security configuration itself.
-    $envPath = Join-Path $ProjectRoot '.env'
-    if (-not (Test-Path -LiteralPath $envPath)) {
-        New-Item -ItemType File -Path $envPath -Force | Out-Null
-    }
-
     foreach ($p in $protectedDirs + $protectedFiles) {
         Verify-Path $p
     }
@@ -98,6 +90,18 @@ try {
         }
         Write-Output "Rollback complete."
         exit 0
+    }
+
+    Write-Output "Checking for pre-existing LumiRuntime deny ACEs..."
+
+    foreach ($p in $protectedDirs + $protectedFiles) {
+        $aclText = (& $icacls.Source $p 2>&1 | Out-String)
+        if ($LASTEXITCODE -ne 0) {
+            throw "could not inspect ACL before applying: $p"
+        }
+        if ($aclText -match [regex]::Escape($sid) -and $aclText -match 'DENY') {
+            throw "pre-existing LumiRuntime deny ACE found on $p; refusing to modify existing deny state"
+        }
     }
 
     Write-Output "Applying LumiRuntime control-plane deny ACEs..."
@@ -120,7 +124,7 @@ try {
     Write-Output ""
     Write-Output "ACL enforcement commands completed."
     Write-Output "Run the read-only verifier next:"
-    Write-Output "  .\phase5f_b_inspect.ps1"
+    Write-Output "  .\phase5f_b_verify.ps1"
     Write-Output "Rollback command (explicit):"
     Write-Output "  .\phase5f_b_acl_apply.ps1 -Confirm -Rollback"
     exit 0
