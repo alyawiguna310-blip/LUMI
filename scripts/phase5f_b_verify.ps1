@@ -92,13 +92,13 @@ foreach ($p in $protectedDirs + $protectedFiles) {
 # access: reads must work, protected writes must be denied, and the normal
 # workspace must remain writable.
 $repoRoot = $ProjectRoot
-$runtimePython = 'C:\Program Files\LumiRuntime\Python312\python.exe'
+$runtimePython = 'C:\Program Files\Python312\python.exe'
 $launcher = Join-Path $repoRoot 'scripts\launch_lumi_as_runtime.py'
 $probeResult = Join-Path $repoRoot 'workspace\phase5fb_acl_result.json'
 
 if (-not (Test-Path -LiteralPath $runtimePython)) {
     Write-Output "FAIL: dedicated LumiRuntime Python missing: $runtimePython"
-    Write-Output "Install a machine-wide Python 3.12 runtime at the exact path above, then retry."
+    Write-Output "Use the existing machine-wide Python 3.12 runtime at the exact path above, then retry."
     exit 1
 }
 if (-not (Test-Path -LiteralPath $launcher)) {
