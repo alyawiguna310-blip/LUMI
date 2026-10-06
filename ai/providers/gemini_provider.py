@@ -81,9 +81,11 @@ class GeminiProvider(LLMProvider):
 
             elif m.role == "tool":
                 contents.append(types.Content(
-                    role="user",
+                    role="tool",
                     parts=[types.Part.from_function_response(
-                        name=m.tool_name, response=m.tool_result,
+                        name=m.tool_name,
+                        response=m.tool_result,
+                        id=m.tool_call_id or None,
                     )],
                 ))
             else:
@@ -156,6 +158,7 @@ class GeminiProvider(LLMProvider):
                 tool_calls=tool_calls,
                 raw_parts=raw_parts,
                 raw=response,
+                source_provider=self.name,
             )
 
         raise RuntimeError("Gemini is overloaded right now. Try again in a few seconds.") from last_error
