@@ -16,7 +16,7 @@ from typing import Any, Callable
 from ai.tool_schema import parse_tool_call
 from security.descriptor import Origin
 from security.gate import SecurityGate, ToolRequest, ToolResult
-from tools import applications, filesystem, terminal
+from tools import applications, diagnostics, filesystem, terminal
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class ToolRouter:
             "applications.search":         applications._do_search,
             "applications.list_installed": applications._do_list_installed,
             "applications.launch":          applications._do_launch,
-            "applications.install":        applications._do_install,
+            "applications.install":        applications._do_install,\n            "diagnostics.read_log":          diagnostics._do_read_log,\n            "diagnostics.python_check":        diagnostics._do_python_check,
         }
         self._elevated_executors: dict[str, Callable] = {
             "terminal.run_admin": terminal._do_run_admin_elevated,
