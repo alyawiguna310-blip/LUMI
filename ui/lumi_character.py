@@ -217,7 +217,7 @@ class LumiCharacter(QWidget):
         p.restore()
 
     def _draw_brows(self, p, color, emotion):
-        p.setPen(QPen(color, 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.Round))
+        p.setPen(QPen(color, 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         p.setBrush(Qt.BrushStyle.NoBrush)
 
         if emotion in ("angry", "annoyed"):
@@ -232,7 +232,7 @@ class LumiCharacter(QWidget):
 
     def _draw_eye(self, p, x, y, color, highlight, is_right):
         if self._blink or self._emotion == "sleepy":
-            p.setPen(QPen(color, 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.Round))
+            p.setPen(QPen(color, 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             p.setBrush(Qt.BrushStyle.NoBrush)
             path = QPainterPath()
             path.moveTo(x - 6, y)
@@ -241,7 +241,7 @@ class LumiCharacter(QWidget):
             return
 
         if self._emotion == "happy":
-            p.setPen(QPen(color, 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.Round))
+            p.setPen(QPen(color, 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             p.setBrush(Qt.BrushStyle.NoBrush)
             path = QPainterPath()
             path.moveTo(x - 6, y + 1)
@@ -274,7 +274,7 @@ class LumiCharacter(QWidget):
         p.drawEllipse(QPointF(x + 1.1 + look, y + 2.0), 1.0, 1.5)
 
     def _draw_mouth(self, p, x, y, color):
-        p.setPen(QPen(color, 1.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.Round))
+        p.setPen(QPen(color, 1.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         p.setBrush(Qt.BrushStyle.NoBrush)
 
         if self._speaking:
@@ -335,7 +335,7 @@ class LumiCharacter(QWidget):
     @staticmethod
     def _draw_sparkle(p, x, y, size):
         pen = QPen(QColor("#cfc7ff"), 1.4)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCapCap)
         p.setPen(pen)
         p.drawLine(QPointF(x - size, y), QPointF(x + size, y))
         p.drawLine(QPointF(x, y - size), QPointF(x, y + size))
