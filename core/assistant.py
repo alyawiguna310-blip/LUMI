@@ -64,7 +64,7 @@ class Assistant:
 
     # ---------- Worker ----------
 
-    def _worker(self, user_text: str, attachment_path: str = "") -> None
+    def _worker(self, user_text: str, attachment_path: str = "") -> None:
         try:
             if not self.provider.is_available():
                 raise RuntimeError(
