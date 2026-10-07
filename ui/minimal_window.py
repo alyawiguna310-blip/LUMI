@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QGraphicsOpacityEffect,
     QApplication,
+    QFileDialog,
 )
 
 from core.events import EventBus
@@ -22,6 +23,13 @@ from ui.lumi_character import LumiCharacter
 
 
 _CHROME_HEIGHT = 100   # bumped from 80 to fit the activity line
+
+
+class AttachmentInput(str):
+    def __new__(cls, text, attachment_path=""):
+        obj = str.__new__(cls, text)
+        obj.attachment_path = attachment_path
+        return obj
 
 
 class _UiSignals(QObject):
@@ -176,6 +184,12 @@ class MinimalWindow(QWidget):
         self.input.setPlaceholderText("type or speak...")
         self.input.returnPressed.connect(self._on_submit)
         bottom.addWidget(self.input, stretch=1)
+
+        self.attach_btn = QPushButton("📎", self)
+        self.attach_btn.setFixedSize(28, 28)
+        self.attach_btn.clicked.connect(self._on_attach_click)
+        self.attach_btn.setToolTip("Attach an image")
+        bottom.addWidget(self.attach_btn)
 
         self.mic_btn = QPushButton("◉", self)
         self.mic_btn.setFixedSize(28, 28)
@@ -367,6 +381,8 @@ class MinimalWindow(QWidget):
         if not text:
             return
         self.input.clear()
+        attachment_path = getattr(self, "_pending_attachment", "")
+        self._pending_attachment = ""
         low = text.lower()
         if low in ("sleep", "lumi, sleep", "go to sleep"):
             self.state_manager.transition(LumiState.SLEEPING)
@@ -379,7 +395,15 @@ class MinimalWindow(QWidget):
         self.label.setText(f"you: {text}")
         self.character.set_emotion("neutral")
         self._resize_to_content()
-        self._on_user_input(text)
+        self._on_user_input(AttachmentInput(text, attachment_path))
+
+    def _on_attach_click(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Attach an image", "", "Images (*.png *.jpg *.jpeg *.webp *.heic *.heif)")
+        if path:
+            self._pending_attachment = path
+            self.input.setPlaceholderText("Image attached — type your question...")
+            self.label.setText("attachment ready — type your question")
+            self._resize_to_content()
 
     def _on_mic_click(self):
         if self._on_mic_clicked is not None:
