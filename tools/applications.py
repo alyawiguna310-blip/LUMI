@@ -274,7 +274,7 @@ def _resolve_installed_app(name: str) -> tuple[str | None, str | None]:
     if not query:
         return None, "application name must be non-empty"
     if len(query) > 100 or any(
-        ch in query for ch in "\/:;&|$<>\r\n"
+        ch in query for ch in "/:;&|$<>\r\n"
     ):
         return None, "application name contains disallowed characters"
 
