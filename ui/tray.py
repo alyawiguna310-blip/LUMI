@@ -90,21 +90,11 @@ class TrayIcon:
         logger.info("Tray: Open requested")
         self.state_manager.transition(LumiState.IDLE)
 
-    # ---- voice ----
+    # ---- control panel ----
 
-    def _set_voice(self, voice: str):
-        self._current_voice = voice
-        logger.info("Tray: TTS voice -> %s", voice)
-        bus.emit("tts.voice_changed", voice=voice)
-        if self._icon:
-            self._icon.update_menu()
-
-    def _set_speed(self, speed: float):
-        self._current_speed = float(speed)
-        logger.info("Tray: TTS speed -> %.2fx", speed)
-        bus.emit("tts.speed_changed", speed=speed)
-        if self._icon:
-            self._icon.update_menu()
+    def _on_open_settings(self, icon, item):
+        logger.info("Tray: Control Panel requested")
+        bus.emit("open_settings")
 
     # ---- terminal toggles ----
 
@@ -133,18 +123,6 @@ class TrayIcon:
             logger.info("Tray: opened %s", path)
         except Exception:
             logger.exception("Failed to open terminal log")
-
-    # ---- informational security panels ----
-
-    def _open_protected_files(self, icon, item):
-        logger.info("Tray: Protected Files panel requested")
-        for path in PROTECTED_ITEMS:
-            logger.info("Protected: %s", path)
-
-    def _open_restricted_commands(self, icon, item):
-        logger.info("Tray: Restricted Commands panel requested")
-        for rule in RESTRICTED_COMMAND_RULES:
-            logger.info("Restriction: %s", rule)
 
     # ---- misc ----
 
@@ -217,8 +195,7 @@ class TrayIcon:
             MenuItem("Wake", self._on_wake),
             MenuItem("Sleep", self._on_sleep),
             MenuItem("Open Lumi", self._on_open),
-            MenuItem("Voice", self._voice_menu()),
-            MenuItem("Security", self._security_menu()),
+            MenuItem("Control Panel", self._on_open_settings),
             Menu.SEPARATOR,
             MenuItem("Exit", self._on_exit),
         )
