@@ -73,6 +73,8 @@ class TrayIcon:
     def __init__(self, state_manager: StateManager):
         self.state_manager = state_manager
         self._icon: pystray.Icon | None = None
+        self._current_voice = getattr(config, "VOICE", "af_bella")
+        self._current_speed = float(getattr(config, "SPEECH_SPEED", 1.0))
 
     # ---- state ----
 
@@ -91,16 +93,18 @@ class TrayIcon:
     # ---- voice ----
 
     def _set_voice(self, voice: str):
+        self._current_voice = voice
         logger.info("Tray: TTS voice -> %s", voice)
         bus.emit("tts.voice_changed", voice=voice)
+        if self._icon:
+            self._icon.update_menu()
 
     def _set_speed(self, speed: float):
+        self._current_speed = float(speed)
         logger.info("Tray: TTS speed -> %.2fx", speed)
         bus.emit("tts.speed_changed", speed=speed)
-
-    @staticmethod
-    def _voice_label(name: str, voice: str):
-        return lambda item: f"{'✓ ' if getattr(item, 'checked', False) else ''}{name}"
+        if self._icon:
+            self._icon.update_menu()
 
     # ---- terminal toggles ----
 
@@ -168,13 +172,13 @@ class TrayIcon:
         items = []
         for name, voice in VOICE_PRESETS:
             items.append(MenuItem(
-                name,
+                lambda item, n=name, v=voice: f"{'✓ ' if self._current_voice == v else ''}{n}",
                 lambda icon, item, v=voice: self._set_voice(v),
             ))
         items.append(Menu.SEPARATOR)
         items.append(MenuItem("Speech speed", Menu(*[
             MenuItem(
-                name,
+                lambda item, n=name, s=speed: f"{'✓ ' if abs(self._current_speed - s) < 0.001 else ''}{n}",
                 lambda icon, item, s=speed: self._set_speed(s),
             )
             for name, speed in SPEED_PRESETS
@@ -182,14 +186,8 @@ class TrayIcon:
         return Menu(*items)
 
     def _security_menu(self):
-        protected = Menu(*[
-            MenuItem(path, lambda icon, item: self._open_protected_files(icon, item))
-            for path in PROTECTED_ITEMS
-        ])
-        restrictions = Menu(*[
-            MenuItem(rule, lambda icon, item: self._open_restricted_commands(icon, item))
-            for rule in RESTRICTED_COMMAND_RULES
-        ])
+        protected = Menu(*[MenuItem(path, None, enabled=False) for path in PROTECTED_ITEMS])
+        restrictions = Menu(*[MenuItem(rule, None, enabled=False) for rule in RESTRICTED_COMMAND_RULES])
         return Menu(
             MenuItem(self._label_terminal, self._on_toggle_terminal),
             MenuItem(self._label_tools, self._on_toggle_tools),
