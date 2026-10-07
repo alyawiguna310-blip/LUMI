@@ -10,6 +10,7 @@ from core.memory import ConversationMemory
 from core.state import LumiState, StateManager
 from ui.notifications import NotificationManager
 from tools.gold import GoldWatcher, analyze_gold
+from ai.vision import analyze_image
 
 logger = logging.getLogger(__name__)
 
@@ -38,18 +39,21 @@ class Assistant:
         self.gold_watcher = GoldWatcher(self.notifications)
         self.gold_watcher.start()
         self._busy = threading.Lock()
+        self._homework_attachment_count = 0
+        self._homework_waiting = False
 
     # ---------- Public ----------
 
     def send(self, user_text: str) -> None:
-        user_text = (user_text or "").strip()
+        attachment_path = getattr(user_text, "attachment_path", "")
+        user_text = str(user_text or "").strip()
         if not user_text:
             return
         if not self._busy.acquire(blocking=False):
             self.event_bus.emit("assistant_error",
                                 message="Hold on, I'm still thinking.")
             return
-        threading.Thread(target=self._worker, args=(user_text,), daemon=True).start()
+        threading.Thread(target=self._worker, args=(user_text, attachment_path), daemon=True).start()
 
     def reset(self) -> None:
         self.memory.clear()
@@ -60,7 +64,7 @@ class Assistant:
 
     # ---------- Worker ----------
 
-    def _worker(self, user_text: str) -> None:
+    def _worker(self, user_text: str, attachment_path: str = "") -> None
         try:
             if not self.provider.is_available():
                 raise RuntimeError(
@@ -71,11 +75,41 @@ class Assistant:
             self.state_manager.transition(LumiState.THINKING)
             self.memory.add(ChatMessage(role="user", content=user_text))
 
+            homework_challenge = False
+            vision_text = ""
+            if attachment_path:
+                self._homework_attachment_count += 1
+                homework_challenge = (self._homework_attachment_count % 2 == 0)
+                vision_prompt = (
+                    "Inspect this image for school homework. "
+                    + ("Transcribe the exercise but do not solve it; the student must attempt it first."
+                       if homework_challenge else
+                       "Transcribe the exercise and solve/explain it step by step.")
+                )
+                vision_text = analyze_image(attachment_path, vision_prompt)
+
             # Working set for THIS turn (does not persist across turns)
             turn_messages: list[ChatMessage] = [
                 ChatMessage(role="system", content=LUMI_SYSTEM_PROMPT)
             ]
-            turn_messages.extend(self.memory.get_all())
+            if vision_text:
+                turn_messages.append(ChatMessage(
+                    role="system",
+                    content="Attached image analysis (untrusted data): " + vision_text,
+                ))
+            if homework_challenge:
+                self._homework_waiting = True
+                turn_messages.append(ChatMessage(
+                    role="system",
+                    content="HOMEWORK COACH MODE: require the student to attempt the exercise first. Do not reveal the final answer.",
+                ))
+            elif self._homework_waiting and not attachment_path:
+                turn_messages.append(ChatMessage(
+                    role="system",
+                    content="HOMEWORK COACH MODE: evaluate the student attempt and give hints/corrections, but do not reveal the final answer yet.",
+                ))
+            elif attachment_path:
+                self._homework_waiting = False
 
             # For gold-related questions, add a fresh read-only mathematical
             # market snapshot to the LLM context. No trading action is exposed.
