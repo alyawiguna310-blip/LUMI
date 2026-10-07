@@ -168,12 +168,22 @@ class TrayIcon:
     def _label_status(item):
         return "Lumi: Listening for wake word" if config.WAKE_ENABLED else "Lumi: Wake word disabled"
 
+    def _make_voice_action(self, voice):
+        def action(icon, item):
+            self._set_voice(voice)
+        return action
+
+    def _make_speed_action(self, speed):
+        def action(icon, item):
+            self._set_speed(speed)
+        return action
+
     def _voice_menu(self):
         items = []
         for name, voice in VOICE_PRESETS:
             items.append(MenuItem(
                 name,
-                lambda icon, item, v=voice: self._set_voice(v),
+                self._make_voice_action(voice),
                 checked=lambda item, v=voice: self._current_voice == v,
                 radio=True,
             ))
@@ -181,7 +191,7 @@ class TrayIcon:
         items.append(MenuItem("Speech speed", Menu(*[
             MenuItem(
                 name,
-                lambda icon, item, s=speed: self._set_speed(s),
+                self._make_speed_action(speed),
                 checked=lambda item, s=speed: abs(self._current_speed - s) < 0.001,
                 radio=True,
             )
