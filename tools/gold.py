@@ -24,7 +24,7 @@ from security.gate import SecurityGate, ToolRequest
 logger = logging.getLogger(__name__)
 
 _YAHOO_HOST = "query1.finance.yahoo.com"
-_GOLD_SYMBOL = "XAUUSD=X"
+_GOLD_SYMBOL = "GC=F"
 _FX_SYMBOL = "USDIDR=X"
 _MAX_HISTORY_DAYS = 365
 _DEFAULT_HISTORY_DAYS = 180
