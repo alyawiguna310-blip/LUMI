@@ -37,13 +37,20 @@ class ToolRouter:
             "applications.search":         applications._do_search,
             "applications.list_installed": applications._do_list_installed,
             "applications.launch":          applications._do_launch,
-            "applications.install":        applications._do_install,\n            "diagnostics.read_log":          diagnostics._do_read_log,\n            "diagnostics.python_check":        diagnostics._do_python_check,
+            "applications.install":        applications._do_install,
+            "diagnostics.read_log":          diagnostics._do_read_log,
+            "diagnostics.python_check":        diagnostics._do_python_check,
         }
         self._elevated_executors: dict[str, Callable] = {
             "terminal.run_admin": terminal._do_run_admin_elevated,
         }
 
-    def route(self, name: str, args: dict) -> dict:\n        # Diagnostics are registered with the same gate before routing.\n        # They remain read-only and cannot bypass control-plane protections.\n        if "diagnostics.read_log" not in self.gate._tools:\n            diagnostics.register(self.gate)\n
+    def route(self, name: str, args: dict) -> dict:
+        # Diagnostics are registered with the same gate before routing.
+        # They remain read-only and cannot bypass control-plane protections.
+        if "diagnostics.read_log" not in self.gate._tools:
+            diagnostics.register(self.gate)
+
         ok, err, cleaned = parse_tool_call(name, args)
         if not ok:
             logger.warning("Tool call rejected: %s — %s", name, err)
