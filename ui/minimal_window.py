@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QFileDialog,
 )
 
+from ai.attachments import validate_image
 from core.events import EventBus
 from core.state import LumiState, StateManager
 from ui import themes
@@ -57,6 +58,10 @@ class MinimalWindow(QWidget):
         self.event_bus = event_bus
         self._on_user_input = on_user_input
         self._on_mic_clicked = on_mic_clicked
+        self._pending_attachment = ""
+        self._drag_active = False
+
+        self.setAcceptDrops(True)
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -400,6 +405,7 @@ class MinimalWindow(QWidget):
         self.input.clear()
         attachment_path = getattr(self, "_pending_attachment", "")
         self._pending_attachment = ""
+        self.input.setPlaceholderText("type or speak...")
         low = text.lower()
         if low in ("sleep", "lumi, sleep", "go to sleep"):
             self.state_manager.transition(LumiState.SLEEPING)
@@ -414,19 +420,84 @@ class MinimalWindow(QWidget):
         self._resize_to_content()
         self._on_user_input(AttachmentInput(text, attachment_path))
 
-    def _on_attach_click(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Attach an image", "", "Images (*.png *.jpg *.jpeg *.webp *.heic *.heif)")
-        if path:
-            self._pending_attachment = path
-            self.input.setPlaceholderText("Image attached — type your question...")
-            self.label.setText("attachment ready — type your question")
+    def _set_attachment(self, path: str):
+        ok, _mime, error = validate_image(path)
+        if not ok:
+            self.label.setText(f"attachment rejected: {error}")
             self._resize_to_content()
+            return False
+        self._pending_attachment = path
+        self.input.setPlaceholderText("Image attached — type your question...")
+        self.label.setText("attachment ready — type your question")
+        self._resize_to_content()
+        return True
+
+    def _on_attach_click(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Attach an image",
+            "",
+            "Images (*.png *.jpg *.jpeg *.webp *.heic *.heif)",
+        )
+        if path:
+            self._set_attachment(path)
+
+    # ---------- Drag and drop ----------
+
+    def dragEnterEvent(self, event):
+        mime = event.mimeData()
+        if mime.hasUrls() and any(
+            url.isLocalFile() for url in mime.urls()
+        ):
+            event.acceptProposedAction()
+            self._drag_active = True
+            self.label.setText("drop an image on Lumi...")
+            self._resize_to_content()
+            return
+        event.ignore()
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragLeaveEvent(self, event):
+        self._drag_active = False
+        if not self._pending_attachment:
+            self.label.setText("")
+        event.accept()
+
+    def dropEvent(self, event):
+        self._drag_active = False
+        paths = [
+            url.toLocalFile()
+            for url in event.mimeData().urls()
+            if url.isLocalFile()
+        ]
+        if not paths:
+            event.ignore()
+            return
+
+        # The current vision pipeline accepts one image per message.
+        image_path = next(
+            (path for path in paths if validate_image(path)[0]),
+            "",
+        )
+        if not image_path:
+            self.label.setText("drop rejected — use a supported image")
+            self._resize_to_content()
+            event.ignore()
+            return
+
+        self._set_attachment(image_path)
+        event.acceptProposedAction()
+
+    # ---------- Mouse ----------
 
     def _on_mic_click(self):
         if self._on_mic_clicked is not None:
             self._on_mic_clicked()
-
-    # ---------- Drag ----------
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
