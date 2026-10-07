@@ -33,6 +33,8 @@ class ChatMessage:
     tool_name: str = ""
     tool_result: dict = field(default_factory=dict)
     raw_parts: list = field(default_factory=list)
+    image_path: str = ""
+    image_mime: str = ""
 
     def to_dict(self) -> dict:
         return {"role": self.role, "content": self.content}
