@@ -41,6 +41,13 @@ _INVALID_MARKERS = (
     "malformed",
 )
 
+# Provider-specific model/config errors should allow fallback. They are not
+# bugs in Lumi's request schema and should not abort the whole provider chain.
+_MODEL_CONFIG_MARKERS = (
+    "model_not_found", "model does not exist", "model_not_found_error",
+    "does not exist or you do not have access to it",
+)
+
 
 def classify_error(exc: BaseException) -> ErrorKind:
     """Map an exception to one of ErrorKind."""
@@ -66,6 +73,12 @@ def classify_error(exc: BaseException) -> ErrorKind:
     for m in _TRANSIENT_MARKERS:
         if m in msg or m in name:
             return ErrorKind.TRANSIENT
+
+    # Provider model/config mismatch: skip this provider and continue
+    # through the fallback chain.
+    for m in _MODEL_CONFIG_MARKERS:
+        if m in msg or m in name:
+            return ErrorKind.UNKNOWN
 
     # Invalid only if it's a genuine bad-request with none of the above
     for m in _INVALID_MARKERS:
