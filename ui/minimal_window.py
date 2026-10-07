@@ -20,6 +20,7 @@ from core.state import LumiState, StateManager
 from ui import themes
 from ui.caption_label import CaptionLabel
 from ui.lumi_character import LumiCharacter
+from ui.settings_window import SettingsWindow
 
 
 _CHROME_HEIGHT = 100   # bumped from 80 to fit the activity line
@@ -40,6 +41,7 @@ class _UiSignals(QObject):
     mic_state_changed = pyqtSignal(bool)
     activity_started = pyqtSignal(str)
     activity_finished = pyqtSignal()
+    open_settings = pyqtSignal()
 
 
 class MinimalWindow(QWidget):
@@ -124,6 +126,7 @@ class MinimalWindow(QWidget):
         self._signals.mic_state_changed.connect(self._on_mic_state)
         self._signals.activity_started.connect(self._on_activity_started)
         self._signals.activity_finished.connect(self._on_activity_finished)
+        self._signals.open_settings.connect(self._show_settings)
 
         self.state_manager.add_observer(
             lambda old, new: self._signals.state_changed.emit(old, new)
@@ -135,6 +138,10 @@ class MinimalWindow(QWidget):
         self.event_bus.subscribe(
             "assistant_error",
             lambda message: self._signals.error_ready.emit(message),
+        )
+        self.event_bus.subscribe(
+            "open_settings",
+            lambda: self._signals.open_settings.emit(),
         )
         # Live activity — any tool call
         self.event_bus.subscribe(
@@ -153,6 +160,16 @@ class MinimalWindow(QWidget):
                 else ("tools PAUSED" if paused else "")
             ),
         )
+
+    # ---------- Control panel ----------
+
+    def _show_settings(self):
+        if not hasattr(self, "_settings_window") or self._settings_window is None:
+            self._settings_window = SettingsWindow(
+                state_manager=self.state_manager,
+                parent=self,
+            )
+        self._settings_window.show_panel()
 
     # ---------- UI ----------
 
