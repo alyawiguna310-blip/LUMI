@@ -172,14 +172,18 @@ class TrayIcon:
         items = []
         for name, voice in VOICE_PRESETS:
             items.append(MenuItem(
-                lambda item, n=name, v=voice: f"{'✓ ' if self._current_voice == v else ''}{n}",
+                name,
                 lambda icon, item, v=voice: self._set_voice(v),
+                checked=lambda item, v=voice: self._current_voice == v,
+                radio=True,
             ))
         items.append(Menu.SEPARATOR)
         items.append(MenuItem("Speech speed", Menu(*[
             MenuItem(
-                lambda item, n=name, s=speed: f"{'✓ ' if abs(self._current_speed - s) < 0.001 else ''}{n}",
+                name,
                 lambda icon, item, s=speed: self._set_speed(s),
+                checked=lambda item, s=speed: abs(self._current_speed - s) < 0.001,
+                radio=True,
             )
             for name, speed in SPEED_PRESETS
         ])))
