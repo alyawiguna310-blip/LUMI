@@ -41,6 +41,13 @@ class Assistant:
         self._busy = threading.Lock()
         self._homework_attachment_count = 0
         self._homework_waiting = False
+        self.event_bus.subscribe("tts.voice_changed", self._on_voice_changed)
+
+    def _on_voice_changed(self, voice: str) -> None:
+        if not isinstance(voice, str) or not voice.strip():
+            return
+        self.tts_voice = voice.strip()
+        logger.info("TTS voice changed from tray: %s", self.tts_voice)
 
     # ---------- Public ----------
 
