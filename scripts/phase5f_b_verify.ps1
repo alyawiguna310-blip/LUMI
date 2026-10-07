@@ -9,7 +9,7 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $RuntimeName = 'LumiRuntime'
-$ProjectRoot = 'D:\\Lumi'
+$ProjectRoot = 'D:\Lumi'
 $icacls = Get-Command icacls.exe -ErrorAction SilentlyContinue
 
 Write-Output "=== LumiRuntime + control-plane ACL verification ==="
@@ -54,14 +54,14 @@ Write-Output "Checking expected deny ACEs..."
 function Test-DenyAce {
     param([string]$AclText, [bool]$Directory)
 
-    $identity = [regex]::Escape("$env:COMPUTERNAME\\$RuntimeName")
+    $identity = [regex]::Escape("$env:COMPUTERNAME\$RuntimeName")
     if ($AclText -notmatch 'DENY' -or $AclText -notmatch $identity) { return $false }
 
     if ($Directory) {
-        return $AclText -match '\\(OI\\)\\(CI\\)\\(DENY\\)\\(DE,WO,WD,AD,WEA,DC,WA\\)'
+        return $AclText -match '\(OI\)\(CI\)\(DENY\)\(DE,WO,WD,AD,WEA,DC,WA\)'
     }
 
-    return $AclText -match '\\(DENY\\)\\(DE,WO,WD,AD,WEA,WA\\)'
+    return $AclText -match '\(DENY\)\(DE,WO,WD,AD,WEA,WA\)'
 }
 
 foreach ($p in $protectedDirs + $protectedFiles) {
