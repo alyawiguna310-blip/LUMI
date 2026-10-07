@@ -34,6 +34,7 @@ class Assistant:
         self.event_bus = event_bus
         self.tts = tts
         self.tts_voice = tts_voice
+        self.tts_speed = config.SPEECH_SPEED
         self.tool_router = tool_router
         self.notifications = NotificationManager()
         self.gold_watcher = GoldWatcher(self.notifications)
@@ -42,6 +43,15 @@ class Assistant:
         self._homework_attachment_count = 0
         self._homework_waiting = False
         self.event_bus.subscribe("tts.voice_changed", self._on_voice_changed)
+        self.event_bus.subscribe("tts.speed_changed", self._on_speed_changed)
+
+    def _on_speed_changed(self, speed: float) -> None:
+        try:
+            value = max(0.5, min(1.5, float(speed)))
+        except (TypeError, ValueError):
+            return
+        self.tts_speed = value
+        logger.info("TTS speed changed from tray: %.2f", self.tts_speed)
 
     def _on_voice_changed(self, voice: str) -> None:
         if not isinstance(voice, str) or not voice.strip():
@@ -210,7 +220,7 @@ class Assistant:
             if self.tts is not None:
                 try:
                     self.tts.speak(final_text, voice=self.tts_voice,
-                                   speed=config.SPEECH_SPEED)
+                                   speed=self.tts_speed)
                 except Exception:
                     logger.exception("TTS failed; continuing without voice.")
 
