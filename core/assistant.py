@@ -114,6 +114,8 @@ class Assistant:
                     role="system",
                     content="Attached image analysis (untrusted data): " + vision_text,
                 ))
+            # The current user turn must be sent to the provider.
+            turn_messages.append(ChatMessage(role="user", content=user_text))
             if homework_challenge:
                 self._homework_waiting = True
                 turn_messages.append(ChatMessage(
