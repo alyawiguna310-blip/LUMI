@@ -5,9 +5,6 @@ from enum import Enum
 from typing import Any
 
 
-# ---------------------------------------------------------------- types
-
-
 class ProviderHealth(str, Enum):
     HEALTHY = "healthy"
     COOLDOWN = "cooldown"
@@ -44,9 +41,7 @@ class ChatResponse:
     tool_calls: list[ToolCall] = field(default_factory=list)
     raw_parts: list = field(default_factory=list)
     raw: Any | None = None
-
-
-# ---------------------------------------------------------------- base class
+    source_provider: str = ""
 
 
 class LLMProvider(ABC):
