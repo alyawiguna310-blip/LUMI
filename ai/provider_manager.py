@@ -144,11 +144,11 @@ class ProviderManager(LLMProvider):
                                entry.name, kind.value, err_msg[:200])
                 errors.append(f"{entry.name}: {err_msg[:160]}")
 
-                if kind == ErrorKind.INVALID:
-                    # Our bug — do NOT mask it by falling back
-                    logger.error("Provider %s: INVALID request — re-raising", entry.name)
-                    raise
-
+                # A provider-side 4xx/INVALID_ARGUMENT is scoped to that
+                # provider/model/request adapter. It must not prevent the
+                # configured fallback chain from trying the same conversation.
+                # Local programming errors that are not classified as INVALID
+                # still follow the normal error path and remain visible.
                 entry.mark_failure(kind, err_msg)
                 any_transient_failure = True
                 continue
