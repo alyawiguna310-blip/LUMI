@@ -33,7 +33,7 @@ class Config:
     # --- Anthropic / Claude ---
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
     ANTHROPIC_MODEL: str = os.getenv("ANTHROPIC_MODEL",
-                                     "claude-3-5-sonnet-latest")
+                                     "claude-sonnet-5-5")
 
     # --- DeepSeek ---
     DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")

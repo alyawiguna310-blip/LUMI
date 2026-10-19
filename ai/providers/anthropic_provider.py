@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class AnthropicProvider(LLMProvider):
     name = "anthropic"
 
-    def __init__(self, api_key: str, model: str = "claude-3-5-sonnet-latest"):
+    def __init__(self, api_key: str, model: str = "claude-sonnet-5-5"):
         self.api_key = api_key
         self.model = model
         self._client = None
@@ -92,7 +92,7 @@ class AnthropicProvider(LLMProvider):
 
         kwargs = {
             "model": self.model,
-            "max_tokens": max_tokens,
+            "max_tokens": max(max_tokens, 4096),
             "messages": anth_messages,
         }
         if system_text:
